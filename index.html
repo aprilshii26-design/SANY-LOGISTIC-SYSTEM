@@ -1,91 +1,169 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SANY LOGISTIC SYSTEM</title>
-<style>
-*{box-sizing:border-box}
-body{
-  margin:0;
-  font-family:Arial,sans-serif;
-  background:#f4f5f7;
-  color:#222;
-}
-header{
-  background:#d71920;
-  color:white;
-  padding:25px 20px;
-  border-bottom:5px solid #a90000;
-}
-header h1{margin:0;font-size:25px}
-header p{margin:8px 0 0;font-size:13px}
-.container{max-width:850px;margin:30px auto;padding:20px}
-.welcome{margin-bottom:25px}
-.welcome h2{margin-bottom:5px}
-.menu{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-  gap:15px;
-}
-.item{
-  background:white;
-  padding:22px;
-  border-radius:12px;
-  border:1px solid #ddd;
-  border-left:5px solid #d71920;
-  box-shadow:0 3px 10px #0000000c;
-}
-.item h3{font-size:16px;margin:0 0 10px}
-.item p{font-size:13px;color:#666;margin:0}
-footer{text-align:center;color:#888;font-size:12px;padding:25px}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SANY LOGISTIC SYSTEM</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f5f7;
+      color: #222;
+    }
+
+    header {
+      background: #d71920;
+      color: white;
+      padding: 25px 20px;
+      border-bottom: 5px solid #a90000;
+    }
+
+    header h1 { margin: 0; font-size: 25px; }
+    header p { margin: 8px 0 0; font-size: 13px; }
+
+    .container {
+      max-width: 850px;
+      margin: 30px auto;
+      padding: 20px;
+    }
+
+    .welcome { margin-bottom: 25px; }
+
+    .menu {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 15px;
+    }
+
+    .item {
+      background: white;
+      padding: 22px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+      border-left: 5px solid #d71920;
+      box-shadow: 0 3px 10px #0000000c;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+    }
+
+    .item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 14px #00000018;
+    }
+
+    .item h3 { font-size: 16px; margin: 0 0 10px; }
+    .item p { font-size: 13px; color: #666; margin: 0; }
+
+    button {
+      border: 0;
+      border-radius: 7px;
+      padding: 12px 16px;
+      background: #d71920;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      margin: 5px 5px 5px 0;
+    }
+
+    button:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+
+    input, textarea {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0 16px;
+      border: 1px solid #ccc;
+      border-radius: 7px;
+      font: inherit;
+    }
+
+    label { font-weight: bold; }
+
+    .form-scan {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 22px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 3px 12px #00000010;
+    }
+
+    .form-scan h2 { margin-top: 12px; }
+
+    footer {
+      text-align: center;
+      color: #888;
+      font-size: 12px;
+      padding: 25px;
+    }
+
+    @media (max-width: 600px) {
+      .container { margin: 15px auto; padding: 16px; }
+      header { padding: 25px 20px; }
+    }
+  </style>
 </head>
+
 <body>
-<header>
-  <h1>SANY LOGISTIC SYSTEM</h1>
-  <p>LOGISTIC ADMINISTRATION & MONITORING</p>
-</header>
-<main class="container">
-  <section class="welcome">
-    <h2>Selamat Datang</h2>
-    <p>Sistem administrasi dan monitoring Logistic SANY.</p>
-  </section>
-  <section class="menu">
-    <div class="item" onclick="openMenu('regular')">
-      <h3>01. Administrasi Regular</h3>
-      <p>Scan dan pencatatan DO Regular.</p>
-    </div>
-    <div class="item" onclick="openMenu('trucking')">
-      <h3>02. Administrasi Trucking</h3>
-      <p>Scan dan pencatatan DO Trucking.</p>
-    </div>
-    <div class="item" onclick="openMenu('selfpickup')">
-      <h3>03. Administrasi Self Pickup</h3>
-      <p>Scan DO dan dokumentasi foto.</p>
-    </div>
-    <div class="item" onclick="openMenu('return-regular')">
-      <h3>04. Return DO Regular</h3>
-      <p>Pencatatan pengembalian DO Regular.</p>
-    </div>
-    <div class="item" onclick="openMenu('return-trucking')">
-      <h3>05. Return DO Trucking</h3>
-      <p>Pencatatan pengembalian DO Trucking.</p>
-    </div>
-  </section>
-</main>
-<footer>PT SANY HEAVY INDUSTRY INDONESIA</footer>
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <header>
+    <h1>SANY LOGISTIC SYSTEM</h1>
+    <p>LOGISTIC ADMINISTRATION & MONITORING</p>
+  </header>
 
-<!-- Firebase Configuration -->
-<script src="/firebase-config.js"></script>
+  <main class="container">
+    <section class="welcome">
+      <h2>Selamat Datang</h2>
+      <p>Sistem administrasi dan monitoring Logistic SANY.</p>
+    </section>
 
-<!-- QR Scanner -->
-<script src="https://unpkg.com/html5-qrcode"></script>
+    <section class="menu">
+      <div class="item" onclick="openMenu('regular')">
+        <h3>01. Administrasi Regular</h3>
+        <p>Scan dan pencatatan DO Regular.</p>
+      </div>
 
-<!-- Main Application -->
-<script src="/js/app.js"></script>
+      <div class="item" onclick="openMenu('trucking')">
+        <h3>02. Administrasi Trucking</h3>
+        <p>Scan dan pencatatan DO Trucking.</p>
+      </div>
+
+      <div class="item" onclick="openMenu('selfpickup')">
+        <h3>03. Administrasi Self Pickup</h3>
+        <p>Scan DO dan dokumentasi foto.</p>
+      </div>
+
+      <div class="item" onclick="openMenu('return-regular')">
+        <h3>04. Return DO Regular</h3>
+        <p>Pencatatan pengembalian DO Regular.</p>
+      </div>
+
+      <div class="item" onclick="openMenu('return-trucking')">
+        <h3>05. Return DO Trucking</h3>
+        <p>Pencatatan pengembalian DO Trucking.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>PT SANY HEAVY INDUSTRY INDONESIA</footer>
+
+  <!-- Firebase Compat -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+
+  <!-- Firebase Configuration -->
+  <script src="./firebase-config.js"></script>
+
+  <!-- QR Scanner -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <!-- Main Application -->
+  <script src="./js/app.js"></script>
 </body>
 </html>

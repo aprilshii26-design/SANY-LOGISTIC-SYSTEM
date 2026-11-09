@@ -11,7 +11,7 @@ const menus = [
 
 let scanner = null;
 let inputMethod = "MANUAL";
-let selectedPhoto = null;
+let selectedPhotos = [];
 let currentUser = null;
 
 const main = document.querySelector("main");
@@ -19,26 +19,20 @@ const originalDashboard = main.innerHTML;
 const auth = firebase.auth();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-googleProvider.setCustomParameters({
-  prompt: "select_account"
-});
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
-// KOMUNIKASI GITHUB PAGES KE APPS SCRIPT
+// KOMUNIKASI APPS SCRIPT
 function callAppsScript(payload) {
   return new Promise((resolve, reject) => {
     const requestId =
       Date.now().toString(36) + "_" +
       Math.random().toString(36).slice(2);
 
-    const requestPayload = {
-      ...payload,
-      requestId: requestId
-    };
+    const requestPayload = { ...payload, requestId };
 
     const iframe = document.createElement("iframe");
     const form = document.createElement("form");
     const input = document.createElement("input");
-
     const frameName = "sany_api_" + requestId;
 
     iframe.name = frameName;
@@ -84,7 +78,6 @@ function callAppsScript(payload) {
       }
 
       if (!result || result.requestId !== requestId) return;
-
       finish(resolve, result);
     };
 
@@ -100,6 +93,42 @@ function callAppsScript(payload) {
     form.submit();
   });
 }
+
+// NOTIFIKASI OTOMATIS
+function showToast(message, type = "success") {
+  let toast = document.getElementById("sanyToast");
+
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "sanyToast";
+    toast.style.cssText = `
+      position:fixed;
+      left:50%;
+      bottom:30px;
+      transform:translateX(-50%);
+      z-index:99999;
+      padding:14px 22px;
+      border-radius:10px;
+      color:white;
+      font-weight:bold;
+      font-size:14px;
+      max-width:90%;
+      text-align:center;
+      box-shadow:0 4px 15px #0003;
+    `;
+    document.body.appendChild(toast);
+  }
+
+  toast.style.background = type === "success" ? "#218838" : "#C62828";
+  toast.textContent = message;
+  toast.style.display = "block";
+
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => {
+    toast.style.display = "none";
+  }, 2500);
+}
+
 // LOGIN
 function showLogin(message = "") {
   stopScanner();
@@ -143,7 +172,6 @@ async function verifyAccess(user) {
 
   } catch (error) {
     console.error("Verifikasi akses:", error);
-
     await auth.signOut();
     showLogin(error.message);
   }
@@ -159,12 +187,9 @@ function showDashboard() {
     "display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;background:#f5f5f5;border-radius:8px;margin:15px auto;max-width:1000px;";
 
   const userInfo = document.createElement("span");
-
-  userInfo.textContent =
-    currentUser.email + " | " + currentUser.role;
+  userInfo.textContent = currentUser.email + " | " + currentUser.role;
 
   const logout = document.createElement("button");
-
   logout.textContent = "LOGOUT";
 
   logout.onclick = async () => {
@@ -176,12 +201,11 @@ function showDashboard() {
   main.insertBefore(userBar, main.firstChild);
 }
 
-// STATUS LOGIN FIREBASE
+// STATUS LOGIN
 auth.onAuthStateChanged(user => {
   if (user) {
     main.innerHTML =
       "<p style='text-align:center;padding:50px'>Memeriksa akses...</p>";
-
     verifyAccess(user);
   } else {
     currentUser = null;
@@ -197,13 +221,12 @@ function openMenu(id) {
   }
 
   const menu = menus.find(item => item.id === id);
-
   if (!menu) return;
 
   stopScanner();
+  clearSelectedPhotos();
 
   inputMethod = "MANUAL";
-  selectedPhoto = null;
 
   main.innerHTML = `
     <section class="form-scan">
@@ -213,69 +236,50 @@ function openMenu(id) {
       <h2>${menu.title}</h2>
 
       <label>DO Number</label>
-      <input
-        type="text"
-        id="doNumber"
+      <input type="text" id="doNumber"
         placeholder="Scan QR atau ketik DO Number"
-        autocomplete="off"
-      >
+        autocomplete="off">
 
       ${id === "trucking" ? `
         <label>Logistic Name</label>
-        <input
-          type="text"
-          id="logisticName"
-          placeholder="Nama logistik"
-        >
+        <input type="text" id="logisticName"
+          placeholder="Nama logistik">
       ` : ""}
 
       ${id === "selfpickup" ? `
-        <label>Foto DO</label>
+        <label>Foto DO (Maksimal 10 foto)</label>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0">
 
           <label style="background:#C62828;color:white;padding:12px;border-radius:7px;cursor:pointer">
             KAMERA
-            <input
-              type="file"
-              id="cameraPhoto"
+            <input type="file" id="cameraPhoto"
               accept="image/jpeg,image/png,image/webp"
-              capture="environment"
-              hidden
-            >
+              capture="environment" multiple hidden>
           </label>
 
           <label style="background:#444;color:white;padding:12px;border-radius:7px;cursor:pointer">
             GALERI
-            <input
-              type="file"
-              id="galleryPhoto"
+            <input type="file" id="galleryPhoto"
               accept="image/jpeg,image/png,image/webp"
-              hidden
-            >
+              multiple hidden>
           </label>
 
         </div>
 
-        <img
-          id="photoPreview"
-          style="display:none;width:100%;max-width:350px;border-radius:8px;margin:10px 0"
-        >
+        <div id="photoPreviewList"
+          style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+        </div>
 
-        <p id="photoStatus">Belum ada foto dipilih.</p>
+        <p id="photoStatus">Belum ada foto dipilih (0/10).</p>
       ` : ""}
 
       <label>Remarks</label>
+      <textarea id="remarks"
+        placeholder="Keterangan (opsional)"></textarea>
 
-      <textarea
-        id="remarks"
-        placeholder="Keterangan (opsional)"
-      ></textarea>
-
-      <div
-        id="reader"
-        style="width:100%;max-width:350px;margin:15px 0"
-      ></div>
+      <div id="reader"
+        style="width:100%;max-width:350px;margin:15px 0"></div>
 
       <button onclick="startScanner()">SCAN QR CODE</button>
       <button onclick="stopScanner()">TUTUP KAMERA</button>
@@ -291,88 +295,172 @@ function openMenu(id) {
     </section>
   `;
 
-  document.getElementById("doNumber").addEventListener(
-    "input",
-    () => {
-      inputMethod = "MANUAL";
-
-      document.getElementById("inputMethod").textContent =
-        "Metode input: MANUAL";
-    }
-  );
+  document.getElementById("doNumber").addEventListener("input", () => {
+    inputMethod = "MANUAL";
+    document.getElementById("inputMethod").textContent =
+      "Metode input: MANUAL";
+  });
 
   if (id === "selfpickup") {
     document.getElementById("cameraPhoto").addEventListener(
-      "change",
-      handlePhoto
+      "change", handlePhoto
     );
 
     document.getElementById("galleryPhoto").addEventListener(
-      "change",
-      handlePhoto
+      "change", handlePhoto
     );
   }
 }
 
-// FOTO SELF PICKUP
-function handlePhoto(event) {
-  const file = event.target.files[0];
+// BERSIHKAN FOTO
+function clearSelectedPhotos() {
+  selectedPhotos.forEach(photo => {
+    URL.revokeObjectURL(photo.previewUrl);
+  });
 
-  if (!file) return;
-
-  if (
-    !["image/jpeg", "image/png", "image/webp"].includes(file.type)
-  ) {
-    alert("Format foto harus JPG, PNG, atau WEBP.");
-    event.target.value = "";
-    return;
-  }
-
-  if (file.size > 8 * 1024 * 1024) {
-    alert("Ukuran foto maksimal 8 MB.");
-    event.target.value = "";
-    return;
-  }
-
-  selectedPhoto = file;
-
-  const preview = document.getElementById("photoPreview");
-
-  if (preview.dataset.objectUrl) {
-    URL.revokeObjectURL(preview.dataset.objectUrl);
-  }
-
-  const objectUrl = URL.createObjectURL(file);
-  preview.src = objectUrl;
-  preview.dataset.objectUrl = objectUrl;
-  preview.style.display = "block";
-
-  document.getElementById("photoStatus").textContent =
-    "Foto siap diunggah: " + file.name;
+  selectedPhotos = [];
 }
 
-// KONVERSI FOTO KE BASE64
-function fileToBase64(file) {
+// PILIH FOTO
+function handlePhoto(event) {
+  const files = Array.from(event.target.files || []);
+  event.target.value = "";
+
+  if (!files.length) return;
+
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ];
+
+  for (const file of files) {
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Format foto harus JPG, PNG, atau WEBP.", "error");
+      continue;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      showToast("Ukuran setiap foto maksimal 8 MB.", "error");
+      continue;
+    }
+
+    if (selectedPhotos.length >= 10) {
+      showToast("Maksimal 10 foto per transaksi.", "error");
+      break;
+    }
+
+    selectedPhotos.push({
+      file,
+      previewUrl: URL.createObjectURL(file)
+    });
+  }
+
+  renderPhotoPreviews();
+}
+
+// TAMPILKAN PREVIEW
+function renderPhotoPreviews() {
+  const container = document.getElementById("photoPreviewList");
+  const status = document.getElementById("photoStatus");
+
+  if (!container || !status) return;
+
+  container.innerHTML = "";
+
+  selectedPhotos.forEach((photo, index) => {
+    const card = document.createElement("div");
+    card.style.cssText =
+      "position:relative;border:1px solid #ddd;border-radius:8px;padding:5px;";
+
+    const img = document.createElement("img");
+    img.src = photo.previewUrl;
+    img.style.cssText =
+      "width:100%;height:120px;object-fit:cover;border-radius:5px;";
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "HAPUS";
+    remove.style.cssText =
+      "width:100%;margin:5px 0 0;padding:7px;";
+
+    remove.onclick = () => removePhoto(index);
+
+    card.append(img, remove);
+    container.appendChild(card);
+  });
+
+  status.textContent =
+    `Foto dipilih: ${selectedPhotos.length}/10`;
+}
+
+// HAPUS FOTO
+function removePhoto(index) {
+  const photo = selectedPhotos[index];
+  if (!photo) return;
+
+  URL.revokeObjectURL(photo.previewUrl);
+  selectedPhotos.splice(index, 1);
+  renderPhotoPreviews();
+}
+
+// KOMPRES FOTO KE JPEG BASE64
+async function compressPhoto(file) {
+  let bitmap;
+
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch (error) {
+    throw new Error("Gagal membaca foto: " + file.name);
+  }
+
+  const maxDimension = 1600;
+  const scale = Math.min(
+    1,
+    maxDimension / Math.max(bitmap.width, bitmap.height)
+  );
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const blob = await new Promise(resolve => {
+    canvas.toBlob(resolve, "image/jpeg", 0.72);
+  });
+
+  if (!blob) {
+    throw new Error("Gagal mengompres foto.");
+  }
+
+  if (blob.size > 1024 * 1024) {
+    throw new Error(
+      "Foto " + file.name + " masih terlalu besar setelah kompresi."
+    );
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
     reader.onload = () => {
-      const dataUrl = String(reader.result);
-      resolve(dataUrl.split(",")[1]);
+      resolve(String(reader.result).split(",")[1]);
     };
 
-    reader.onerror = () => {
-      reject(new Error("Gagal membaca foto."));
-    };
+    reader.onerror = () => reject(
+      new Error("Gagal membaca hasil kompresi foto.")
+    );
 
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
   });
 }
 
 // QR SCANNER
 async function startScanner() {
   if (typeof Html5Qrcode === "undefined") {
-    alert("Library QR Scanner belum berhasil dimuat.");
+    showToast("Library QR Scanner belum dimuat.", "error");
     return;
   }
 
@@ -395,10 +483,7 @@ async function startScanner() {
         inputMethod = "SCAN";
 
         const method = document.getElementById("inputMethod");
-
-        if (method) {
-          method.textContent = "Metode input: SCAN";
-        }
+        if (method) method.textContent = "Metode input: SCAN";
 
         stopScanner();
       },
@@ -406,7 +491,7 @@ async function startScanner() {
     );
   } catch (error) {
     scanner = null;
-    alert("Kamera gagal dibuka: " + error);
+    showToast("Kamera gagal dibuka: " + error, "error");
   }
 }
 
@@ -426,6 +511,8 @@ function stopScanner() {
 async function goHome() {
   stopScanner();
 
+  clearSelectedPhotos();
+
   const user = auth.currentUser;
 
   if (user) {
@@ -433,6 +520,40 @@ async function goHome() {
   } else {
     showLogin();
   }
+}
+
+// RESET FORM SETELAH SIMPAN
+function resetScanForm(id) {
+  document.getElementById("doNumber").value = "";
+
+  document.getElementById("remarks").value = "";
+
+  const logistic = document.getElementById("logisticName");
+  if (logistic) logistic.value = "";
+
+  clearSelectedPhotos();
+
+  const preview = document.getElementById("photoPreviewList");
+  if (preview) preview.innerHTML = "";
+
+  const photoStatus = document.getElementById("photoStatus");
+  if (photoStatus) photoStatus.textContent = "Belum ada foto dipilih (0/10).";
+
+  inputMethod = "MANUAL";
+
+  const method = document.getElementById("inputMethod");
+  if (method) method.textContent = "Metode input: MANUAL";
+
+  const status = document.getElementById("saveStatus");
+  if (status) status.textContent = "";
+
+  const button = document.getElementById("saveButton");
+  if (button) {
+    button.disabled = false;
+    button.textContent = "SIMPAN";
+  }
+
+  document.getElementById("doNumber").focus();
 }
 
 // SIMPAN TRANSAKSI
@@ -450,12 +571,12 @@ async function submitScan(id) {
     document.getElementById("saveButton");
 
   if (!doNumber) {
-    alert("DO Number wajib diisi!");
+    showToast("DO Number wajib diisi!", "error");
     return;
   }
 
   if (!auth.currentUser) {
-    alert("Sesi login tidak ditemukan. Silakan login kembali.");
+    showToast("Sesi login tidak ditemukan.", "error");
     return;
   }
 
@@ -466,13 +587,13 @@ async function submitScan(id) {
       document.getElementById("logisticName").value.trim();
 
     if (!logisticName) {
-      alert("Nama logistik wajib diisi!");
+      showToast("Nama logistik wajib diisi!", "error");
       return;
     }
   }
 
-  if (id === "selfpickup" && !selectedPhoto) {
-    alert("Foto DO wajib dilampirkan!");
+  if (id === "selfpickup" && selectedPhotos.length === 0) {
+    showToast("Minimal satu foto DO wajib dilampirkan!", "error");
     return;
   }
 
@@ -487,20 +608,47 @@ async function submitScan(id) {
       action: "SCAN",
       idToken: token,
       menu: id,
-      doNumber: doNumber,
-      logisticName: logisticName,
-      remarks: remarks,
-      inputMethod: inputMethod
+      doNumber,
+      logisticName,
+      remarks,
+      inputMethod
     };
 
     if (id === "selfpickup") {
-      status.textContent = "Membaca foto...";
+      if (selectedPhotos.length > 10) {
+        throw new Error("Maksimal 10 foto.");
+      }
 
-      payload.photoBase64 = await fileToBase64(selectedPhoto);
-      payload.photoMimeType = selectedPhoto.type;
+      status.textContent =
+        `Mengompres ${selectedPhotos.length} foto...`;
+
+      const photos = [];
+
+      for (const photo of selectedPhotos) {
+        const photoBase64 = await compressPhoto(photo.file);
+
+        photos.push({
+          photoBase64,
+          photoMimeType: "image/jpeg"
+        });
+      }
+
+      const totalBytes = photos.reduce(
+        (total, photo) =>
+          total + Math.ceil(photo.photoBase64.length * 0.75),
+        0
+      );
+
+      if (totalBytes > 8 * 1024 * 1024) {
+        throw new Error(
+          "Total ukuran foto melebihi 8 MB. Kurangi jumlah atau ukuran foto."
+        );
+      }
+
+      payload.photos = photos;
     }
 
-    status.textContent = "Mengirim transaksi ke server...";
+    status.textContent = "Mengirim transaksi...";
 
     const result = await callAppsScript(payload);
 
@@ -508,25 +656,21 @@ async function submitScan(id) {
       throw new Error(result.message || "Penyimpanan gagal.");
     }
 
-    status.textContent =
-      result.message || "Transaksi berhasil disimpan.";
+    resetScanForm(id);
 
-    alert("Transaksi berhasil disimpan!");
-
-    selectedPhoto = null;
-    stopScanner();
-    await goHome();
+    showToast(
+      result.message || "Transaksi berhasil disimpan.",
+      "success"
+    );
 
   } catch (error) {
     console.error("Simpan transaksi:", error);
 
     status.textContent = error.message;
-    alert("Gagal menyimpan: " + error.message);
 
-  } finally {
-    if (document.getElementById("saveButton")) {
-      button.disabled = false;
-      button.textContent = "SIMPAN";
-    }
+    showToast("Gagal menyimpan: " + error.message, "error");
+
+    button.disabled = false;
+    button.textContent = "SIMPAN";
   }
 }

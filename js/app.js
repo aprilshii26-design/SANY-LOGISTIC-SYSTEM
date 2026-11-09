@@ -241,9 +241,9 @@ function openMenu(id) {
         autocomplete="off">
 
       ${id === "trucking" ? `
-        <label>Logistic Name</label>
+        <label>Logistic Name (Opsional)</label>
         <input type="text" id="logisticName"
-          placeholder="Nama logistik">
+          placeholder="Nama logistik (boleh dikosongkan)">
       ` : ""}
 
       ${id === "selfpickup" ? `
@@ -583,13 +583,10 @@ async function submitScan(id) {
   let logisticName = "";
 
   if (id === "trucking") {
-    logisticName =
-      document.getElementById("logisticName").value.trim();
-
-    if (!logisticName) {
-      showToast("Nama logistik wajib diisi!", "error");
-      return;
-    }
+    const logisticInput = document.getElementById("logisticName");
+    logisticName = logisticInput
+      ? logisticInput.value.trim()
+      : "";
   }
 
   if (id === "selfpickup" && selectedPhotos.length === 0) {

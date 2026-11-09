@@ -26,11 +26,20 @@ googleProvider.setCustomParameters({
 // KOMUNIKASI GITHUB PAGES KE APPS SCRIPT
 function callAppsScript(payload) {
   return new Promise((resolve, reject) => {
+    const requestId =
+      Date.now().toString(36) + "_" +
+      Math.random().toString(36).slice(2);
+
+    const requestPayload = {
+      ...payload,
+      requestId: requestId
+    };
+
     const iframe = document.createElement("iframe");
     const form = document.createElement("form");
     const input = document.createElement("input");
-    const frameName = "sany_api_" + Date.now() + "_" +
-      Math.random().toString(36).slice(2);
+
+    const frameName = "sany_api_" + requestId;
 
     iframe.name = frameName;
     iframe.style.display = "none";
@@ -42,7 +51,7 @@ function callAppsScript(payload) {
 
     input.type = "hidden";
     input.name = "payload";
-    input.value = JSON.stringify(payload);
+    input.value = JSON.stringify(requestPayload);
 
     form.appendChild(input);
     document.body.append(iframe, form);
@@ -64,11 +73,19 @@ function callAppsScript(payload) {
     };
 
     const onMessage = event => {
-      if (event.source !== iframe.contentWindow) return;
+      let result = event.data;
 
-      if (!event.data || typeof event.data !== "object") return;
+      if (typeof result === "string") {
+        try {
+          result = JSON.parse(result);
+        } catch (error) {
+          return;
+        }
+      }
 
-      finish(resolve, event.data);
+      if (!result || result.requestId !== requestId) return;
+
+      finish(resolve, result);
     };
 
     window.addEventListener("message", onMessage);
@@ -76,14 +93,13 @@ function callAppsScript(payload) {
     const timeout = setTimeout(() => {
       finish(
         reject,
-        new Error("Server tidak memberikan respons. Coba lagi.")
+        new Error("Server tidak memberikan respons. Silakan coba lagi.")
       );
     }, 120000);
 
     form.submit();
   });
 }
-
 // LOGIN
 function showLogin(message = "") {
   stopScanner();

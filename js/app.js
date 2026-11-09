@@ -1,3 +1,6 @@
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbzTJ49IkTUY5jvLxD2tvGrZKEAKjDfVNlAEi8xbeMptxy5UxLHFPqQDs8vhi2MdDjDQ/exec";
+
 const menus = [
   { id: "regular", title: "Administrasi Regular" },
   { id: "trucking", title: "Administrasi Trucking" },
@@ -20,6 +23,67 @@ googleProvider.setCustomParameters({
   prompt: "select_account"
 });
 
+// KOMUNIKASI GITHUB PAGES KE APPS SCRIPT
+function callAppsScript(payload) {
+  return new Promise((resolve, reject) => {
+    const iframe = document.createElement("iframe");
+    const form = document.createElement("form");
+    const input = document.createElement("input");
+    const frameName = "sany_api_" + Date.now() + "_" +
+      Math.random().toString(36).slice(2);
+
+    iframe.name = frameName;
+    iframe.style.display = "none";
+
+    form.method = "POST";
+    form.action = APPS_SCRIPT_URL;
+    form.target = frameName;
+    form.style.display = "none";
+
+    input.type = "hidden";
+    input.name = "payload";
+    input.value = JSON.stringify(payload);
+
+    form.appendChild(input);
+    document.body.append(iframe, form);
+
+    let completed = false;
+
+    const cleanup = () => {
+      window.removeEventListener("message", onMessage);
+      form.remove();
+      iframe.remove();
+      clearTimeout(timeout);
+    };
+
+    const finish = (callback, value) => {
+      if (completed) return;
+      completed = true;
+      cleanup();
+      callback(value);
+    };
+
+    const onMessage = event => {
+      if (event.source !== iframe.contentWindow) return;
+
+      if (!event.data || typeof event.data !== "object") return;
+
+      finish(resolve, event.data);
+    };
+
+    window.addEventListener("message", onMessage);
+
+    const timeout = setTimeout(() => {
+      finish(
+        reject,
+        new Error("Server tidak memberikan respons. Coba lagi.")
+      );
+    }, 120000);
+
+    form.submit();
+  });
+}
+
 // LOGIN
 function showLogin(message = "") {
   stopScanner();
@@ -29,9 +93,11 @@ function showLogin(message = "") {
       <h2>SANY LOGISTIC SYSTEM</h2>
       <p>Login menggunakan akun Google terdaftar.</p>
       <button id="googleLogin">LOGIN WITH GOOGLE</button>
-      <p style="color:#C62828">${message}</p>
+      <p style="color:#C62828" id="loginMessage"></p>
     </section>
   `;
+
+  document.getElementById("loginMessage").textContent = message;
 
   document.getElementById("googleLogin").onclick = async () => {
     try {
@@ -47,15 +113,12 @@ async function verifyAccess(user) {
   try {
     const token = await user.getIdToken();
 
-    const response = await fetch("/api/auth/me", {
-      headers: {
-        Authorization: "Bearer " + token
-      }
+    const result = await callAppsScript({
+      action: "AUTH_ME",
+      idToken: token
     });
 
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
+    if (!result.success) {
       throw new Error(result.message || "Akses ditolak.");
     }
 
@@ -63,7 +126,8 @@ async function verifyAccess(user) {
     showDashboard();
 
   } catch (error) {
-    console.error(error);
+    console.error("Verifikasi akses:", error);
+
     await auth.signOut();
     showLogin(error.message);
   }
@@ -79,55 +143,12 @@ function showDashboard() {
     "display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;background:#f5f5f5;border-radius:8px;margin:15px auto;max-width:1000px;";
 
   const userInfo = document.createElement("span");
+
   userInfo.textContent =
     currentUser.email + " | " + currentUser.role;
 
-  const actionGroup = document.createElement("div");
-  actionGroup.style.cssText =
-    "display:flex;gap:8px;flex-wrap:wrap;";
-
-  // KHUSUS ADMIN
-  if (currentUser.role === "ADMIN") {
-    const driveButton = document.createElement("button");
-
-    driveButton.textContent = "HUBUNGKAN GOOGLE DRIVE";
-
-    driveButton.onclick = async () => {
-      try {
-        driveButton.disabled = true;
-        driveButton.textContent = "MENGHUBUNGKAN...";
-
-        const token = await auth.currentUser.getIdToken();
-
-        const response = await fetch("/api/drive/auth", {
-          headers: {
-            Authorization: "Bearer " + token
-          }
-        });
-
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          throw new Error(
-            result.message || "Gagal menghubungkan Google Drive."
-          );
-        }
-
-        window.location.href = result.authUrl;
-
-      } catch (error) {
-        alert(error.message);
-
-        driveButton.disabled = false;
-        driveButton.textContent = "HUBUNGKAN GOOGLE DRIVE";
-      }
-    };
-
-    actionGroup.appendChild(driveButton);
-  }
-
-  // LOGOUT
   const logout = document.createElement("button");
+
   logout.textContent = "LOGOUT";
 
   logout.onclick = async () => {
@@ -135,20 +156,17 @@ function showDashboard() {
     await auth.signOut();
   };
 
-  actionGroup.appendChild(logout);
-
-  userBar.append(userInfo, actionGroup);
+  userBar.append(userInfo, logout);
   main.insertBefore(userBar, main.firstChild);
 }
 
-// FIREBASE AUTH STATE
+// STATUS LOGIN FIREBASE
 auth.onAuthStateChanged(user => {
   if (user) {
     main.innerHTML =
       "<p style='text-align:center;padding:50px'>Memeriksa akses...</p>";
 
     verifyAccess(user);
-
   } else {
     currentUser = null;
     showLogin();
@@ -157,6 +175,11 @@ auth.onAuthStateChanged(user => {
 
 // BUKA MENU
 function openMenu(id) {
+  if (!currentUser) {
+    showLogin("Silakan login terlebih dahulu.");
+    return;
+  }
+
   const menu = menus.find(item => item.id === id);
 
   if (!menu) return;
@@ -200,7 +223,7 @@ function openMenu(id) {
             <input
               type="file"
               id="cameraPhoto"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               capture="environment"
               hidden
             >
@@ -211,7 +234,7 @@ function openMenu(id) {
             <input
               type="file"
               id="galleryPhoto"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               hidden
             >
           </label>
@@ -299,58 +322,88 @@ function handlePhoto(event) {
 
   const preview = document.getElementById("photoPreview");
 
-  preview.src = URL.createObjectURL(file);
+  if (preview.dataset.objectUrl) {
+    URL.revokeObjectURL(preview.dataset.objectUrl);
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  preview.src = objectUrl;
+  preview.dataset.objectUrl = objectUrl;
   preview.style.display = "block";
 
   document.getElementById("photoStatus").textContent =
     "Foto siap diunggah: " + file.name;
 }
 
+// KONVERSI FOTO KE BASE64
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      resolve(dataUrl.split(",")[1]);
+    };
+
+    reader.onerror = () => {
+      reject(new Error("Gagal membaca foto."));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
 // QR SCANNER
-function startScanner() {
+async function startScanner() {
   if (typeof Html5Qrcode === "undefined") {
     alert("Library QR Scanner belum berhasil dimuat.");
     return;
   }
 
+  if (scanner) return;
+
   scanner = new Html5Qrcode("reader");
 
-  scanner.start(
-    { facingMode: "environment" },
-    {
-      fps: 10,
-      qrbox: {
-        width: 250,
-        height: 250
-      }
-    },
-    decodedText => {
-      document.getElementById("doNumber").value =
-        decodedText;
+  try {
+    await scanner.start(
+      { facingMode: "environment" },
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 }
+      },
+      decodedText => {
+        const input = document.getElementById("doNumber");
 
-      inputMethod = "SCAN";
+        if (input) input.value = decodedText;
 
-      document.getElementById("inputMethod").textContent =
-        "Metode input: SCAN";
+        inputMethod = "SCAN";
 
-      stopScanner();
-    },
-    () => {}
-  ).catch(error => {
+        const method = document.getElementById("inputMethod");
+
+        if (method) {
+          method.textContent = "Metode input: SCAN";
+        }
+
+        stopScanner();
+      },
+      () => {}
+    );
+  } catch (error) {
+    scanner = null;
     alert("Kamera gagal dibuka: " + error);
-  });
+  }
 }
 
 // TUTUP SCANNER
 function stopScanner() {
-  if (scanner) {
-    const currentScanner = scanner;
-    scanner = null;
+  if (!scanner) return;
 
-    currentScanner.stop()
-      .then(() => currentScanner.clear())
-      .catch(() => {});
-  }
+  const currentScanner = scanner;
+  scanner = null;
+
+  currentScanner.stop()
+    .then(() => currentScanner.clear())
+    .catch(error => console.warn("Scanner:", error));
 }
 
 // KEMBALI KE DASHBOARD
@@ -361,6 +414,8 @@ async function goHome() {
 
   if (user) {
     await verifyAccess(user);
+  } else {
+    showLogin();
   }
 }
 
@@ -383,70 +438,79 @@ async function submitScan(id) {
     return;
   }
 
-  if (id === "selfpickup" && !selectedPhoto) {
-    alert("Foto DO wajib dilampirkan!");
+  if (!auth.currentUser) {
+    alert("Sesi login tidak ditemukan. Silakan login kembali.");
     return;
   }
 
-  const formData = new FormData();
-
-  formData.append("menu", id);
-  formData.append("doNumber", doNumber);
-  formData.append("remarks", remarks);
-  formData.append("inputMethod", inputMethod);
+  let logisticName = "";
 
   if (id === "trucking") {
-    const logisticName =
+    logisticName =
       document.getElementById("logisticName").value.trim();
 
     if (!logisticName) {
       alert("Nama logistik wajib diisi!");
       return;
     }
-
-    formData.append("logisticName", logisticName);
   }
 
-  if (id === "selfpickup") {
-    formData.append("fotoDO", selectedPhoto);
+  if (id === "selfpickup" && !selectedPhoto) {
+    alert("Foto DO wajib dilampirkan!");
+    return;
   }
 
   try {
     button.disabled = true;
     button.textContent = "MENYIMPAN...";
-    status.textContent = "Mengirim transaksi...";
+    status.textContent = "Menyiapkan transaksi...";
 
     const token = await auth.currentUser.getIdToken();
 
-    const response = await fetch("/api/scan", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + token
-      },
-      body: formData
-    });
+    const payload = {
+      action: "SCAN",
+      idToken: token,
+      menu: id,
+      doNumber: doNumber,
+      logisticName: logisticName,
+      remarks: remarks,
+      inputMethod: inputMethod
+    };
 
-    const result = await response.json();
+    if (id === "selfpickup") {
+      status.textContent = "Membaca foto...";
 
-    if (!response.ok || !result.success) {
-      throw new Error(
-        result.message || "Penyimpanan gagal."
-      );
+      payload.photoBase64 = await fileToBase64(selectedPhoto);
+      payload.photoMimeType = selectedPhoto.type;
     }
 
-    status.textContent = "Transaksi berhasil disimpan.";
+    status.textContent = "Mengirim transaksi ke server...";
 
-    openMenu(id);
+    const result = await callAppsScript(payload);
+
+    if (!result.success) {
+      throw new Error(result.message || "Penyimpanan gagal.");
+    }
+
+    status.textContent =
+      result.message || "Transaksi berhasil disimpan.";
+
+    alert("Transaksi berhasil disimpan!");
+
+    selectedPhoto = null;
+    stopScanner();
+    await goHome();
 
   } catch (error) {
-    console.error(error);
+    console.error("Simpan transaksi:", error);
 
     status.textContent = error.message;
-
     alert("Gagal menyimpan: " + error.message);
 
   } finally {
-    button.disabled = false;
-    button.textContent = "SIMPAN";
+    if (document.getElementById("saveButton")) {
+      button.disabled = false;
+      button.textContent = "SIMPAN";
+    }
   }
 }

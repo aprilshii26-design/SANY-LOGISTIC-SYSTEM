@@ -28,6 +28,8 @@ let currentMenu = null;
 let currentStep = "scan";
 let cameraStarting = false;
 let documentationStream = null;
+let qrCameraId = null;
+let submitting = false;
 
 const main = document.querySelector("main");
 const originalDashboard = main.innerHTML;
@@ -97,7 +99,6 @@ function callAppsScript(payload) {
       }
 
       if (!result || result.requestId !== requestId) return;
-
       finish(resolve, result);
     };
 
@@ -106,7 +107,7 @@ function callAppsScript(payload) {
     const timeout = setTimeout(() => {
       finish(
         reject,
-        new Error("Server tidak memberikan respons. Silakan coba lagi.")
+        new Error("Server tidak memberikan respons. Silakan periksa transaksi sebelum mencoba ulang.")
       );
     }, 180000);
 
@@ -125,7 +126,6 @@ function showToast(message, type = "success") {
   if (!toast) {
     toast = document.createElement("div");
     toast.id = "sanyToast";
-
     toast.style.cssText = `
       position:fixed;
       left:50%;
@@ -141,7 +141,6 @@ function showToast(message, type = "success") {
       text-align:center;
       box-shadow:0 4px 15px #0003;
     `;
-
     document.body.appendChild(toast);
   }
 
@@ -240,7 +239,7 @@ function showDashboard() {
   logout.textContent = "LOGOUT";
 
   logout.onclick = async () => {
-    stopScanner();
+    await stopScanner();
     stopDocumentationCamera();
     await auth.signOut();
   };
@@ -258,9 +257,7 @@ auth.onAuthStateChanged(user => {
   if (user) {
     main.innerHTML =
       "<p style='text-align:center;padding:50px'>Memeriksa akses...</p>";
-
     verifyAccess(user);
-
   } else {
     currentUser = null;
     showLogin();
@@ -278,29 +275,27 @@ async function openMenu(id) {
     return;
   }
 
-  const menu = menus.find(item => item.id === id);
-  if (!menu) return;
+  if (!menus.find(item => item.id === id)) return;
 
   await stopScanner();
-  stopDocumentationCamera();
+  await stopDocumentationCamera();
   clearSelectedAttachments();
 
   currentMenu = id;
   currentStep = "scan";
   inputMethod = "MANUAL";
+  qrCameraId = null;
 
   renderScanScreen();
-
   await startScanner();
 
-  // Fokus input agar scanner PDA keyboard-wedge bisa mengirim hasil.
   const input = document.getElementById("doNumber");
   if (input) input.focus();
 }
 
 
 // ==================================================
-// TAMPILAN SCAN MODE
+// TAMPILAN SCAN
 // ==================================================
 
 function renderScanScreen() {
@@ -371,7 +366,6 @@ function renderScanScreen() {
       ` : ""}
 
       <p id="inputMethod">Metode input: MENUNGGU SCAN</p>
-
     </section>
   `;
 
@@ -417,21 +411,19 @@ function switchToManual() {
 
   if (reader) reader.style.display = "none";
 
-  if (method) {
-    method.textContent = "Metode input: MANUAL";
-  }
+  if (method) method.textContent = "Metode input: MANUAL";
 
   if (input) {
     input.placeholder = "Ketik DO Number secara manual";
     input.focus();
   }
 
-  if (currentMenu === "selfpickup") {
-    if (button) {
-      button.textContent = "KEMBALI KE SCAN";
-      button.onclick = returnToScan;
-    }
+  if (button) {
+    button.textContent = "KEMBALI KE SCAN";
+    button.onclick = returnToScan;
+  }
 
+  if (currentMenu === "selfpickup") {
     let continueButton = document.getElementById("continuePhotoButton");
 
     if (!continueButton) {
@@ -446,12 +438,6 @@ function switchToManual() {
       continueButton.onclick = continueManualSelfPickup;
 
       button.insertAdjacentElement("afterend", continueButton);
-    }
-
-  } else {
-    if (button) {
-      button.textContent = "KEMBALI KE SCAN";
-      button.onclick = returnToScan;
     }
   }
 }
@@ -470,7 +456,6 @@ async function returnToScan() {
   inputMethod = "MANUAL";
 
   renderScanScreen();
-
   await startScanner();
 
   const doInput = document.getElementById("doNumber");
@@ -495,10 +480,7 @@ async function handleDOScanned(value) {
   await stopScanner();
 
   const method = document.getElementById("inputMethod");
-
-  if (method) {
-    method.textContent = "Metode input: SCAN";
-  }
+  if (method) method.textContent = "Metode input: SCAN";
 
   if (currentMenu === "selfpickup") {
     openSelfPickupDocumentation();
@@ -509,7 +491,7 @@ async function handleDOScanned(value) {
 
 
 // ==================================================
-// LANJUT DARI INPUT MANUAL SELFPICKUP
+// LANJUT MANUAL SELFPICKUP
 // ==================================================
 
 function continueManualSelfPickup() {
@@ -554,35 +536,30 @@ function openSelfPickupDocumentation() {
         <p>Metode input: ${inputMethod}</p>
       </div>
 
-      <!-- DO NUMBER DISIMPAN UNTUK PROSES SUBMIT -->
       <input type="hidden" id="doNumber" value="${escapeHTML(doNumber)}">
 
       <h3>Kamera Dokumentasi</h3>
 
       <video id="documentationVideo"
         autoplay playsinline muted
-        style="width:100%;background:#222;border-radius:10px;min-height:200px;object-fit:cover">
+        style="width:100%;background:#222;border-radius:10px;min-height:200px;object-fit:contain">
       </video>
 
-      <p id="cameraStatus">Mengaktifkan kamera dokumentasi...</p>
+      <p id="cameraStatus">Mengaktifkan kamera...</p>
 
-      <button type="button"
-        id="capturePhotoButton"
+      <button type="button" id="capturePhotoButton"
         style="width:100%;background:#C62828;color:white;padding:14px;border:0;border-radius:7px;font-weight:bold">
         AMBIL FOTO
       </button>
 
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin:15px 0">
-
-        <label style="background:#444;color:white;padding:12px;border-radius:7px;cursor:pointer">
+      <div style="margin:15px 0">
+        <label style="display:block;background:#444;color:white;padding:12px;border-radius:7px;cursor:pointer;text-align:center">
           UPLOAD FOTO / PDF
           <input type="file"
             id="galleryAttachment"
             accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
-            multiple
-            hidden>
+            multiple hidden>
         </label>
-
       </div>
 
       <div id="attachmentPreviewList"
@@ -592,7 +569,6 @@ function openSelfPickupDocumentation() {
       <p id="attachmentStatus">Lampiran: 0/10</p>
 
       <label>Remarks</label>
-
       <textarea id="remarks"
         placeholder="Keterangan (opsional)"
         style="width:100%;box-sizing:border-box"></textarea>
@@ -605,7 +581,6 @@ function openSelfPickupDocumentation() {
       </button>
 
       <p id="saveStatus"></p>
-
     </section>
   `;
 
@@ -623,15 +598,14 @@ function openSelfPickupDocumentation() {
 
 
 // ==================================================
-// KAMERA DOKUMENTASI
+// KAMERA DOKUMENTASI: GUNAKAN KAMERA QR YANG SAMA
 // ==================================================
 
 async function startDocumentationCamera() {
   const video = document.getElementById("documentationVideo");
   const status = document.getElementById("cameraStatus");
 
-  if (!video || !navigator.mediaDevices ||
-      !navigator.mediaDevices.getUserMedia) {
+  if (!video || !navigator.mediaDevices?.getUserMedia) {
     if (status) {
       status.textContent =
         "Kamera tidak didukung. Gunakan Upload Foto / PDF.";
@@ -642,23 +616,59 @@ async function startDocumentationCamera() {
   try {
     await stopDocumentationCamera();
 
-    documentationStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" }
-      },
-      audio: false
-    });
+    let constraints;
+
+    if (qrCameraId) {
+      constraints = {
+        video: {
+          deviceId: { exact: qrCameraId }
+        },
+        audio: false
+      };
+    } else {
+      constraints = {
+        video: {
+          facingMode: { ideal: "environment" }
+        },
+        audio: false
+      };
+    }
+
+    try {
+      documentationStream =
+        await navigator.mediaDevices.getUserMedia(constraints);
+
+    } catch (cameraError) {
+      console.warn(
+        "Kamera QR tidak dapat dipakai kembali:",
+        cameraError
+      );
+
+      // Fallback jika ID kamera tidak lagi tersedia
+      documentationStream =
+        await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false
+        });
+    }
 
     if (!document.getElementById("documentationVideo")) {
-      stopDocumentationCamera();
+      await stopDocumentationCamera();
       return;
     }
 
     video.srcObject = documentationStream;
+
+    const track = documentationStream.getVideoTracks()[0];
+    const settings = track ? track.getSettings() : {};
+
+    console.log("Kamera dokumentasi:", settings);
+
     await video.play();
 
     if (status) {
-      status.textContent = "Kamera siap digunakan.";
+      status.textContent =
+        "Kamera siap digunakan. Kamera QR digunakan kembali.";
     }
 
   } catch (error) {
@@ -666,7 +676,7 @@ async function startDocumentationCamera() {
 
     if (status) {
       status.textContent =
-        "Kamera tidak dapat dibuka. Periksa izin kamera atau gunakan Upload Foto / PDF.";
+        "Kamera gagal dibuka. Periksa izin kamera atau gunakan Upload Foto / PDF.";
     }
   }
 }
@@ -684,13 +694,13 @@ async function stopDocumentationCamera() {
 
 
 // ==================================================
-// AMBIL FOTO DARI LIVE CAMERA
+// AMBIL FOTO
 // ==================================================
 
 async function captureDocumentationPhoto() {
   const video = document.getElementById("documentationVideo");
 
-  if (!video || !video.videoWidth) {
+  if (!video || !video.videoWidth || !video.videoHeight) {
     showToast("Kamera belum siap.", "error");
     return;
   }
@@ -702,6 +712,7 @@ async function captureDocumentationPhoto() {
 
   const canvas = document.createElement("canvas");
 
+  // Gunakan ukuran asli video, jangan dipaksa menjadi rasio lain.
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
 
@@ -751,7 +762,6 @@ async function captureDocumentationPhoto() {
   });
 
   renderAttachmentPreviews();
-
   showToast("Foto berhasil ditambahkan.");
 }
 
@@ -854,7 +864,6 @@ function renderAttachmentPreviews() {
       const img = document.createElement("img");
 
       img.src = item.previewUrl;
-
       img.style.cssText =
         "width:100%;height:120px;object-fit:cover;border-radius:5px;";
 
@@ -875,24 +884,19 @@ function renderAttachmentPreviews() {
     }
 
     const filename = document.createElement("div");
-
     filename.textContent = item.file.name;
     filename.style.cssText =
       "font-size:11px;overflow-wrap:anywhere;margin:5px 0;";
 
     const size = document.createElement("div");
-
     size.textContent =
       (item.file.size / 1024 / 1024).toFixed(2) + " MB";
-
     size.style.fontSize = "11px";
 
     const remove = document.createElement("button");
-
     remove.type = "button";
     remove.textContent = "HAPUS";
     remove.style.cssText = "width:100%;margin-top:7px;padding:7px;";
-
     remove.onclick = () => removeAttachment(index);
 
     card.append(filename, size, remove);
@@ -916,7 +920,6 @@ function renderAttachmentPreviews() {
 
 function removeAttachment(index) {
   const item = selectedAttachments[index];
-
   if (!item) return;
 
   if (item.previewUrl) {
@@ -924,14 +927,12 @@ function removeAttachment(index) {
   }
 
   selectedAttachments.splice(index, 1);
-
   renderAttachmentPreviews();
 }
 
 
 // ==================================================
-// KOMPRES FOTO KE JPEG
-// PDF TIDAK DIKOMPRES
+// KOMPRES FOTO
 // ==================================================
 
 async function compressPhoto(file) {
@@ -986,7 +987,7 @@ async function compressPhoto(file) {
 
 
 // ==================================================
-// BACA FILE SEBAGAI BASE64
+// BACA FILE BASE64
 // ==================================================
 
 function readFileBase64(file) {
@@ -1007,7 +1008,7 @@ function readFileBase64(file) {
 
 
 // ==================================================
-// QR SCANNER KAMERA
+// QR SCANNER
 // ==================================================
 
 async function startScanner() {
@@ -1020,7 +1021,6 @@ async function startScanner() {
   }
 
   const reader = document.getElementById("reader");
-
   if (!reader) return;
 
   cameraStarting = true;
@@ -1040,6 +1040,18 @@ async function startScanner() {
       () => {}
     );
 
+    // Simpan deviceId kamera yang benar-benar dipakai QR.
+    try {
+      const settings = scanner.getRunningTrackSettings();
+
+      if (settings && settings.deviceId) {
+        qrCameraId = settings.deviceId;
+        console.log("QR camera ID:", qrCameraId);
+      }
+    } catch (cameraInfoError) {
+      console.warn("Tidak bisa membaca ID kamera QR:", cameraInfoError);
+    }
+
   } catch (error) {
     scanner = null;
 
@@ -1057,7 +1069,7 @@ async function startScanner() {
 
 
 // ==================================================
-// TUTUP SCANNER DAN TUNGGU KAMERA LEPAS
+// TUTUP SCANNER
 // ==================================================
 
 async function stopScanner() {
@@ -1076,7 +1088,7 @@ async function stopScanner() {
 
 
 // ==================================================
-// KEMBALI KE DASHBOARD
+// KEMBALI DASHBOARD
 // ==================================================
 
 async function goHome() {
@@ -1087,6 +1099,7 @@ async function goHome() {
 
   currentMenu = null;
   currentStep = "scan";
+  qrCameraId = null;
 
   const user = auth.currentUser;
 
@@ -1099,7 +1112,7 @@ async function goHome() {
 
 
 // ==================================================
-// RESET FORM SETELAH SIMPAN
+// RESET FORM
 // ==================================================
 
 async function resetScanForm(id) {
@@ -1110,9 +1123,9 @@ async function resetScanForm(id) {
 
   currentStep = "scan";
   inputMethod = "MANUAL";
+  qrCameraId = null;
 
   renderScanScreen();
-
   await startScanner();
 
   const input = document.getElementById("doNumber");
@@ -1125,17 +1138,13 @@ async function resetScanForm(id) {
 // ==================================================
 
 async function submitScan(id) {
-  const doInput = document.getElementById("doNumber");
+  if (submitting) return;
 
-  const doNumber = doInput
-    ? doInput.value.trim()
-    : "";
+  const doInput = document.getElementById("doNumber");
+  const doNumber = doInput ? doInput.value.trim() : "";
 
   const remarksInput = document.getElementById("remarks");
-
-  const remarks = remarksInput
-    ? remarksInput.value.trim()
-    : "";
+  const remarks = remarksInput ? remarksInput.value.trim() : "";
 
   const status = document.getElementById("saveStatus");
   const button = document.getElementById("saveButton");
@@ -1164,19 +1173,18 @@ async function submitScan(id) {
 
   if (id === "trucking") {
     const logisticInput = document.getElementById("logisticName");
-
-    logisticName = logisticInput
-      ? logisticInput.value.trim()
-      : "";
+    logisticName = logisticInput ? logisticInput.value.trim() : "";
   }
+
+  submitting = true;
+
+  const clientStartedAt = performance.now();
 
   try {
     button.disabled = true;
     button.textContent = "MENYIAPKAN...";
 
-    if (status) {
-      status.textContent = "Menyiapkan transaksi...";
-    }
+    if (status) status.textContent = "Menyiapkan transaksi...";
 
     const token = await auth.currentUser.getIdToken();
 
@@ -1190,7 +1198,10 @@ async function submitScan(id) {
       inputMethod
     };
 
+    let preparationMs = 0;
+
     if (id === "selfpickup") {
+      const preparationStartedAt = performance.now();
       const attachments = [];
 
       for (let i = 0; i < selectedAttachments.length; i++) {
@@ -1208,11 +1219,9 @@ async function submitScan(id) {
         if (file.type.startsWith("image/")) {
           blob = await compressPhoto(file);
           mimeType = "image/jpeg";
-
         } else if (file.type === "application/pdf") {
           blob = file;
           mimeType = "application/pdf";
-
         } else {
           throw new Error("Format lampiran tidak didukung.");
         }
@@ -1236,19 +1245,33 @@ async function submitScan(id) {
       }
 
       payload.attachments = attachments;
+
+      preparationMs = performance.now() - preparationStartedAt;
     }
 
-    if (status) {
-      status.textContent = "Mengirim transaksi ke server...";
-    }
+    if (status) status.textContent = "Mengirim transaksi ke server...";
 
     button.textContent = "MENGIRIM...";
 
+    const serverStartedAt = performance.now();
+
     const result = await callAppsScript(payload);
+
+    const serverRoundTripMs = performance.now() - serverStartedAt;
+    const totalClientMs = performance.now() - clientStartedAt;
 
     if (!result.success) {
       throw new Error(result.message || "Penyimpanan gagal.");
     }
+
+    console.log("SANY TRANSACTION PERFORMANCE", {
+      menu: id,
+      doNumber,
+      preparationMs: Math.round(preparationMs),
+      serverRoundTripMs: Math.round(serverRoundTripMs),
+      serverDurationMs: result.durationMs,
+      totalClientMs: Math.round(totalClientMs)
+    });
 
     await resetScanForm(id);
 
@@ -1257,12 +1280,16 @@ async function submitScan(id) {
       "success"
     );
 
+    console.log(
+      "Transaksi berhasil. Waktu respons server:",
+      (serverRoundTripMs / 1000).toFixed(2),
+      "detik"
+    );
+
   } catch (error) {
     console.error("Simpan transaksi:", error);
 
-    if (status) {
-      status.textContent = error.message;
-    }
+    if (status) status.textContent = error.message;
 
     showToast("Gagal menyimpan: " + error.message, "error");
 
@@ -1270,5 +1297,8 @@ async function submitScan(id) {
       button.disabled = false;
       button.textContent = "SIMPAN TRANSAKSI";
     }
+
+  } finally {
+    submitting = false;
   }
 }

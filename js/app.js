@@ -616,63 +616,91 @@ async function startDocumentationCamera() {
   try {
     await stopDocumentationCamera();
 
-    let constraints;
+    // Gunakan kamera yang sama dengan QR jika ID tersedia.
+    const videoConstraints = {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      aspectRatio: { ideal: 16 / 9 }
+    };
 
     if (qrCameraId) {
-      constraints = {
-        video: {
-          deviceId: { exact: qrCameraId }
-        },
-        audio: false
+      videoConstraints.deviceId = {
+        exact: qrCameraId
       };
     } else {
-      constraints = {
-        video: {
-          facingMode: { ideal: "environment" }
-        },
-        audio: false
+      videoConstraints.facingMode = {
+        ideal: "environment"
       };
     }
 
-    try {
-      documentationStream =
-        await navigator.mediaDevices.getUserMedia(constraints);
+    documentationStream =
+      await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints,
+        audio: false
+      });
 
-    } catch (cameraError) {
-      console.warn(
-        "Kamera QR tidak dapat dipakai kembali:",
-        cameraError
-      );
+    const track = documentationStream.getVideoTracks()[0];
 
-      // Fallback jika ID kamera tidak lagi tersedia
-      documentationStream =
-        await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false
-        });
+    // Usahakan zoom normal 1x jika didukung kamera.
+    if (track && typeof track.getCapabilities === "function") {
+      const capabilities = track.getCapabilities();
+
+      if (
+        capabilities.zoom &&
+        capabilities.zoom.min <= 1 &&
+        capabilities.zoom.max >= 1
+      ) {
+        try {
+          await track.applyConstraints({
+            advanced: [{ zoom: 1 }]
+          });
+        } catch (zoomError) {
+          console.warn(
+            "Zoom 1x tidak dapat diterapkan:",
+            zoomError
+          );
+        }
+      }
     }
 
-    if (!document.getElementById("documentationVideo")) {
+    // Pastikan halaman dokumentasi masih aktif.
+    if (
+      !document.getElementById("documentationVideo") ||
+      currentStep !== "documentation"
+    ) {
       await stopDocumentationCamera();
       return;
     }
 
     video.srcObject = documentationStream;
 
-    const track = documentationStream.getVideoTracks()[0];
-    const settings = track ? track.getSettings() : {};
-
-    console.log("Kamera dokumentasi:", settings);
+    // Hindari tampilan video yang diperbesar atau terpotong.
+    video.style.width = "100%";
+    video.style.height = "auto";
+    video.style.objectFit = "contain";
+    video.style.transform = "none";
 
     await video.play();
 
+    const settings = track ? track.getSettings() : {};
+
+    console.log("DOKUMENTASI CAMERA SETTINGS:", {
+      deviceId: settings.deviceId,
+      width: settings.width,
+      height: settings.height,
+      zoom: settings.zoom,
+      facingMode: settings.facingMode
+    });
+
     if (status) {
       status.textContent =
-        "Kamera siap digunakan. Kamera QR digunakan kembali.";
+        "Kamera dokumentasi siap digunakan.";
     }
 
   } catch (error) {
     console.error("Kamera dokumentasi:", error);
+
+    await stopDocumentationCamera();
 
     if (status) {
       status.textContent =
@@ -680,7 +708,6 @@ async function startDocumentationCamera() {
     }
   }
 }
-
 
 async function stopDocumentationCamera() {
   if (!documentationStream) return;

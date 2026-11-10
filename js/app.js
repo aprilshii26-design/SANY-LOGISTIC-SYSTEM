@@ -406,7 +406,9 @@ function switchToManual() {
 
   if (reader) reader.style.display = "none";
 
-  if (method) method.textContent = "Metode input: MANUAL";
+  if (method) {
+    method.textContent = "Metode input: MANUAL";
+  }
 
   if (input) {
     input.placeholder = "Ketik DO Number secara manual";
@@ -418,23 +420,156 @@ function switchToManual() {
     button.onclick = returnToScan;
   }
 
+  // Khusus Self Pickup, dokumentasi langsung tersedia.
   if (currentMenu === "selfpickup") {
-    let continueButton = document.getElementById("continuePhotoButton");
-
-    if (!continueButton) {
-      continueButton = document.createElement("button");
-      continueButton.id = "continuePhotoButton";
-      continueButton.type = "button";
-      continueButton.textContent = "LANJUT KE FOTO";
-
-      continueButton.style.cssText =
-        "width:100%;margin-top:12px;background:#218838;color:white;padding:14px;border:0;border-radius:7px;font-weight:bold;";
-
-      continueButton.onclick = continueManualSelfPickup;
-
-      button.insertAdjacentElement("afterend", continueButton);
-    }
+    renderManualSelfPickupControls();
   }
+}
+
+
+// ==================================================
+// DOKUMENTASI SELFPICKUP DARI MODE MANUAL
+// ==================================================
+
+function renderManualSelfPickupControls() {
+  if (document.getElementById("manualSelfPickupControls")) return;
+
+  const manualButton = document.getElementById("manualButton");
+  if (!manualButton) return;
+
+  const section = document.createElement("div");
+  section.id = "manualSelfPickupControls";
+
+  section.style.cssText = `
+    margin-top:20px;
+    padding-top:15px;
+    border-top:1px solid #ddd;
+  `;
+
+  section.innerHTML = `
+    <h3>Dokumentasi DO</h3>
+
+    <p>
+      Ambil foto menggunakan kamera bawaan HP
+      atau pilih foto/PDF dari perangkat.
+    </p>
+
+    <input
+      type="file"
+      id="cameraAttachment"
+      accept="image/*"
+      capture="environment"
+      style="display:none"
+    >
+
+    <button
+      type="button"
+      id="capturePhotoButton"
+      style="
+        display:block;
+        width:100%;
+        box-sizing:border-box;
+        background:#C62828;
+        color:white;
+        padding:14px;
+        border:0;
+        border-radius:7px;
+        font-weight:bold;
+        margin:12px 0;
+      "
+    >
+      AMBIL FOTO
+    </button>
+
+    <label
+      style="
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        width:100%;
+        min-height:50px;
+        box-sizing:border-box;
+        background:#444;
+        color:white;
+        padding:14px;
+        border-radius:7px;
+        cursor:pointer;
+        text-align:center;
+        font-weight:bold;
+        margin:12px 0;
+      "
+    >
+      UPLOAD FOTO / PDF
+
+      <input
+        type="file"
+        id="galleryAttachment"
+        accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
+        multiple
+        hidden
+      >
+    </label>
+
+    <p id="cameraStatus" style="color:#555">
+      Kamera akan dibuka melalui aplikasi kamera bawaan HP.
+    </p>
+
+    <div
+      id="attachmentPreviewList"
+      style="
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:10px;
+      "
+    ></div>
+
+    <p id="attachmentStatus">Lampiran: 0/10</p>
+
+    <label>Remarks</label>
+
+    <textarea
+      id="remarks"
+      placeholder="Keterangan (opsional)"
+      style="width:100%;box-sizing:border-box"
+    ></textarea>
+
+    <button
+      id="saveButton"
+      type="button"
+      style="width:100%;margin-top:15px"
+    >
+      SIMPAN TRANSAKSI
+    </button>
+
+    <p id="saveStatus"></p>
+  `;
+
+  manualButton.insertAdjacentElement("afterend", section);
+
+  document.getElementById("cameraAttachment").addEventListener(
+    "change",
+    handleAttachments
+  );
+
+  document.getElementById("galleryAttachment").addEventListener(
+    "change",
+    handleAttachments
+  );
+
+  document.getElementById("capturePhotoButton").onclick = () => {
+    if (selectedAttachments.length >= MAX_ATTACHMENTS) {
+      showToast("Maksimal 10 lampiran.", "error");
+      return;
+    }
+
+    document.getElementById("cameraAttachment").click();
+  };
+
+  document.getElementById("saveButton").onclick = () => {
+    submitScan("selfpickup");
+  };
+
+  renderAttachmentPreviews();
 }
 
 
@@ -486,24 +621,6 @@ async function handleDOScanned(value) {
 
 
 // ==================================================
-// LANJUT MANUAL SELFPICKUP
-// ==================================================
-
-function continueManualSelfPickup() {
-  const input = document.getElementById("doNumber");
-  const doNumber = input ? input.value.trim() : "";
-
-  if (!doNumber) {
-    showToast("DO Number wajib diisi.", "error");
-    return;
-  }
-
-  inputMethod = "MANUAL";
-  openSelfPickupDocumentation();
-}
-
-
-// ==================================================
 // DOKUMENTASI SELFPICKUP
 // ==================================================
 
@@ -537,7 +654,6 @@ function openSelfPickupDocumentation() {
 
       <p>Ambil foto menggunakan kamera bawaan HP atau pilih foto/PDF dari perangkat.</p>
 
-      <!-- KAMERA NATIVE ANDROID -->
       <input
         type="file"
         id="cameraAttachment"
@@ -549,22 +665,50 @@ function openSelfPickupDocumentation() {
       <button
         type="button"
         id="capturePhotoButton"
-        style="width:100%;background:#C62828;color:white;padding:14px;border:0;border-radius:7px;font-weight:bold;margin:10px 0"
+        style="
+          display:block;
+          width:100%;
+          box-sizing:border-box;
+          background:#C62828;
+          color:white;
+          padding:14px;
+          border:0;
+          border-radius:7px;
+          font-weight:bold;
+          margin:12px 0;
+        "
       >
         AMBIL FOTO
       </button>
 
-      <!-- UPLOAD GALERI DAN PDF -->
-      <div style="margin:15px 0">
-        <label style="display:block;background:#444;color:white;padding:14px;border-radius:7px;cursor:pointer;text-align:center;font-weight:bold">
-          UPLOAD FOTO / PDF
-          <input type="file"
-            id="galleryAttachment"
-            accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
-            multiple
-            hidden>
-        </label>
-      </div>
+      <label
+        style="
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          width:100%;
+          min-height:50px;
+          box-sizing:border-box;
+          background:#444;
+          color:white;
+          padding:14px;
+          border-radius:7px;
+          cursor:pointer;
+          text-align:center;
+          font-weight:bold;
+          margin:12px 0;
+        "
+      >
+        UPLOAD FOTO / PDF
+
+        <input
+          type="file"
+          id="galleryAttachment"
+          accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
+          multiple
+          hidden
+        >
+      </label>
 
       <p id="cameraStatus" style="color:#555">
         Kamera akan dibuka melalui aplikasi kamera bawaan HP.

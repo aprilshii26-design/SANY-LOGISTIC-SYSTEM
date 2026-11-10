@@ -9,10 +9,24 @@ const menus = [
   { id: "return-trucking", title: "Return DO Trucking" }
 ];
 
+const MAX_ATTACHMENTS = 10;
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_TOTAL_SIZE = 20 * 1024 * 1024;
+
+const ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf"
+];
+
 let scanner = null;
 let inputMethod = "MANUAL";
-let selectedPhotos = [];
+let selectedAttachments = [];
 let currentUser = null;
+let currentMenu = null;
+let currentStep = "scan";
+let cameraStarting = false;
 
 const main = document.querySelector("main");
 const originalDashboard = main.innerHTML;
@@ -21,7 +35,11 @@ const googleProvider = new firebase.auth.GoogleAuthProvider();
 
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
+
+// ==================================================
 // KOMUNIKASI APPS SCRIPT
+// ==================================================
+
 function callAppsScript(payload) {
   return new Promise((resolve, reject) => {
     const requestId =
@@ -88,13 +106,17 @@ function callAppsScript(payload) {
         reject,
         new Error("Server tidak memberikan respons. Silakan coba lagi.")
       );
-    }, 120000);
+    }, 180000);
 
     form.submit();
   });
 }
 
-// NOTIFIKASI OTOMATIS
+
+// ==================================================
+// NOTIFIKASI
+// ==================================================
+
 function showToast(message, type = "success") {
   let toast = document.getElementById("sanyToast");
 
@@ -119,19 +141,27 @@ function showToast(message, type = "success") {
     document.body.appendChild(toast);
   }
 
-  toast.style.background = type === "success" ? "#218838" : "#C62828";
+  toast.style.background =
+    type === "success" ? "#218838" : "#C62828";
+
   toast.textContent = message;
   toast.style.display = "block";
 
   clearTimeout(toast.timer);
+
   toast.timer = setTimeout(() => {
     toast.style.display = "none";
-  }, 2500);
+  }, 3000);
 }
 
+
+// ==================================================
 // LOGIN
+// ==================================================
+
 function showLogin(message = "") {
   stopScanner();
+  clearSelectedAttachments();
 
   main.innerHTML = `
     <section style="max-width:420px;margin:60px auto;padding:30px;background:white;border-radius:12px;text-align:center;">
@@ -153,7 +183,11 @@ function showLogin(message = "") {
   };
 }
 
+
+// ==================================================
 // VERIFIKASI AKSES
+// ==================================================
+
 async function verifyAccess(user) {
   try {
     const token = await user.getIdToken();
@@ -177,8 +211,15 @@ async function verifyAccess(user) {
   }
 }
 
+
+// ==================================================
 // DASHBOARD
+// ==================================================
+
 function showDashboard() {
+  stopScanner();
+  clearSelectedAttachments();
+
   main.innerHTML = originalDashboard;
 
   const userBar = document.createElement("div");
@@ -201,19 +242,29 @@ function showDashboard() {
   main.insertBefore(userBar, main.firstChild);
 }
 
+
+// ==================================================
 // STATUS LOGIN
+// ==================================================
+
 auth.onAuthStateChanged(user => {
   if (user) {
     main.innerHTML =
       "<p style='text-align:center;padding:50px'>Memeriksa akses...</p>";
+
     verifyAccess(user);
+
   } else {
     currentUser = null;
     showLogin();
   }
 });
 
+
+// ==================================================
 // BUKA MENU
+// ==================================================
+
 function openMenu(id) {
   if (!currentUser) {
     showLogin("Silakan login terlebih dahulu.");
@@ -224,70 +275,289 @@ function openMenu(id) {
   if (!menu) return;
 
   stopScanner();
-  clearSelectedPhotos();
+  clearSelectedAttachments();
 
+  currentMenu = id;
+  currentStep = "scan";
   inputMethod = "MANUAL";
 
-  main.innerHTML = `
-    <section class="form-scan">
+  renderScanScreen();
+  startScanner();
+}
 
-      <button onclick="goHome()">← Kembali</button>
+
+// ==================================================
+// TAMPILAN SCAN MODE
+// ==================================================
+
+function renderScanScreen() {
+  const menu = menus.find(item => item.id === currentMenu);
+  if (!menu) return;
+
+  currentStep = "scan";
+
+  main.innerHTML = `
+    <section class="form-scan" style="max-width:550px;margin:auto;padding:15px">
+
+      <button type="button" onclick="goHome()">← Kembali</button>
 
       <h2>${menu.title}</h2>
 
-      <label>DO Number</label>
-      <input type="text" id="doNumber"
-        placeholder="Scan QR atau ketik DO Number"
-        autocomplete="off">
-
-      ${id === "trucking" ? `
-        <label>Logistic Name (Opsional)</label>
-        <input type="text" id="logisticName"
-          placeholder="Nama logistik (boleh dikosongkan)">
-      ` : ""}
-
-      ${id === "selfpickup" ? `
-        <label>Foto DO (Maksimal 10 foto)</label>
-
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0">
-
-          <label style="background:#C62828;color:white;padding:12px;border-radius:7px;cursor:pointer">
-            KAMERA
-            <input type="file" id="cameraPhoto"
-              accept="image/jpeg,image/png,image/webp"
-              capture="environment" multiple hidden>
-          </label>
-
-          <label style="background:#444;color:white;padding:12px;border-radius:7px;cursor:pointer">
-            GALERI
-            <input type="file" id="galleryPhoto"
-              accept="image/jpeg,image/png,image/webp"
-              multiple hidden>
-          </label>
-
-        </div>
-
-        <div id="photoPreviewList"
-          style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
-        </div>
-
-        <p id="photoStatus">Belum ada foto dipilih (0/10).</p>
-      ` : ""}
-
-      <label>Remarks</label>
-      <textarea id="remarks"
-        placeholder="Keterangan (opsional)"></textarea>
+      <div style="background:#e8f5e9;padding:10px;border-radius:8px;margin:12px 0;color:#216b32;font-weight:bold">
+        SCAN MODE AKTIF
+      </div>
 
       <div id="reader"
-        style="width:100%;max-width:350px;margin:15px 0"></div>
+        style="width:100%;max-width:350px;margin:15px auto;min-height:200px">
+      </div>
 
-      <button onclick="startScanner()">SCAN QR CODE</button>
-      <button onclick="stopScanner()">TUTUP KAMERA</button>
+      <p style="text-align:center">
+        Arahkan kamera ke QR Code DO atau gunakan tombol scanner PDA.
+      </p>
 
-      <p id="inputMethod">Metode input: MANUAL</p>
+      <label>DO Number</label>
 
-      <button id="saveButton" onclick="submitScan('${id}')">
-        SIMPAN
+      <input type="text"
+        id="doNumber"
+        placeholder="Hasil scan barcode akan muncul di sini"
+        autocomplete="off"
+        style="width:100%;box-sizing:border-box;padding:12px">
+
+      <button type="button"
+        id="manualButton"
+        onclick="switchToManual()"
+        style="width:100%;margin-top:12px">
+        INPUT MANUAL
+      </button>
+
+      ${currentMenu === "trucking" ? `
+        <div style="margin-top:15px">
+          <label>Logistic Name (Opsional)</label>
+          <input type="text" id="logisticName"
+            placeholder="Nama logistik (boleh dikosongkan)"
+            style="width:100%;box-sizing:border-box;padding:12px">
+        </div>
+      ` : ""}
+
+      ${currentMenu !== "selfpickup" ? `
+        <div style="margin-top:15px">
+          <label>Remarks</label>
+          <textarea id="remarks"
+            placeholder="Keterangan (opsional)"
+            style="width:100%;box-sizing:border-box"></textarea>
+
+          <button id="saveButton"
+            type="button"
+            onclick="submitScan('${currentMenu}')"
+            style="width:100%;margin-top:15px">
+            SIMPAN
+          </button>
+
+          <p id="saveStatus"></p>
+        </div>
+      ` : ""}
+
+      <p id="inputMethod">Metode input: MENUNGGU SCAN</p>
+
+    </section>
+  `;
+
+  const doInput = document.getElementById("doNumber");
+
+  doInput.addEventListener("keydown", event => {
+    // Scanner PDA biasanya mengirim Enter setelah barcode.
+    if (event.key === "Enter") {
+      event.preventDefault();
+
+      const value = doInput.value.trim();
+
+      if (value && currentStep === "scan") {
+        inputMethod = "SCAN";
+        handleDOScanned(value);
+      }
+    }
+  });
+
+  if (currentMenu === "trucking") {
+    document.getElementById("logisticName").addEventListener(
+      "focus",
+      stopScanner
+    );
+  }
+}
+
+
+// ==================================================
+// MODE MANUAL
+// ==================================================
+
+function switchToManual() {
+  stopScanner();
+
+  inputMethod = "MANUAL";
+
+  const reader = document.getElementById("reader");
+  const method = document.getElementById("inputMethod");
+  const button = document.getElementById("manualButton");
+  const input = document.getElementById("doNumber");
+
+  if (reader) reader.style.display = "none";
+
+  if (method) {
+    method.textContent = "Metode input: MANUAL";
+  }
+
+  if (button) {
+    button.textContent = "KEMBALI KE SCAN";
+    button.onclick = returnToScan;
+  }
+
+  if (input) {
+    input.placeholder = "Ketik DO Number secara manual";
+    input.focus();
+  }
+}
+
+
+// ==================================================
+// KEMBALI KE SCAN
+// ==================================================
+
+function returnToScan() {
+  const input = document.getElementById("doNumber");
+
+  if (input) input.value = "";
+
+  inputMethod = "MANUAL";
+
+  renderScanScreen();
+  startScanner();
+}
+
+
+// ==================================================
+// HASIL SCAN QR / PDA
+// ==================================================
+
+function handleDOScanned(value) {
+  const doNumber = String(value || "").trim();
+
+  if (!doNumber) return;
+
+  stopScanner();
+
+  const input = document.getElementById("doNumber");
+
+  if (input) input.value = doNumber;
+
+  inputMethod = "SCAN";
+
+  const method = document.getElementById("inputMethod");
+
+  if (method) {
+    method.textContent = "Metode input: SCAN";
+  }
+
+  if (currentMenu === "selfpickup") {
+    openSelfPickupDocumentation();
+  } else {
+    showToast("DO berhasil terbaca: " + doNumber);
+  }
+}
+
+
+// ==================================================
+// LANJUT DARI INPUT MANUAL SELFPICKUP
+// ==================================================
+
+function continueManualSelfPickup() {
+  const input = document.getElementById("doNumber");
+  const doNumber = input ? input.value.trim() : "";
+
+  if (!doNumber) {
+    showToast("DO Number wajib diisi.", "error");
+    return;
+  }
+
+  inputMethod = "MANUAL";
+  openSelfPickupDocumentation();
+}
+
+
+// ==================================================
+// DOKUMENTASI SELFPICKUP
+// ==================================================
+
+function openSelfPickupDocumentation() {
+  stopScanner();
+
+  const doInput = document.getElementById("doNumber");
+  const doNumber = doInput ? doInput.value.trim() : "";
+
+  if (!doNumber) {
+    showToast("DO Number belum tersedia.", "error");
+    return;
+  }
+
+  currentStep = "documentation";
+
+  main.innerHTML = `
+    <section class="form-scan" style="max-width:550px;margin:auto;padding:15px">
+
+      <button type="button" onclick="goHome()">← Kembali</button>
+
+      <h2>Dokumentasi Self Pickup</h2>
+
+      <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin:12px 0">
+        <strong>DO Number</strong>
+        <p style="font-size:18px;margin:5px 0">${escapeHTML(doNumber)}</p>
+        <p>Metode input: ${inputMethod}</p>
+      </div>
+
+      <h3>Dokumentasi DO</h3>
+
+      <p>Ambil foto langsung atau pilih foto/PDF dari perangkat.</p>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">
+
+        <label style="background:#C62828;color:white;padding:12px;border-radius:7px;cursor:pointer">
+          KAMERA
+          <input type="file"
+            id="cameraAttachment"
+            accept="image/*"
+            capture="environment"
+            multiple
+            hidden>
+        </label>
+
+        <label style="background:#444;color:white;padding:12px;border-radius:7px;cursor:pointer">
+          UPLOAD FOTO / PDF
+          <input type="file"
+            id="galleryAttachment"
+            accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
+            multiple
+            hidden>
+        </label>
+
+      </div>
+
+      <div id="attachmentPreviewList"
+        style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+      </div>
+
+      <p id="attachmentStatus">Lampiran: 0/10</p>
+
+      <label>Remarks</label>
+
+      <textarea id="remarks"
+        placeholder="Keterangan (opsional)"
+        style="width:100%;box-sizing:border-box"></textarea>
+
+      <button id="saveButton"
+        type="button"
+        onclick="submitScan('selfpickup')"
+        style="width:100%;margin-top:15px">
+        SIMPAN TRANSAKSI
       </button>
 
       <p id="saveStatus"></p>
@@ -295,116 +565,201 @@ function openMenu(id) {
     </section>
   `;
 
-  document.getElementById("doNumber").addEventListener("input", () => {
-    inputMethod = "MANUAL";
-    document.getElementById("inputMethod").textContent =
-      "Metode input: MANUAL";
-  });
+  document.getElementById("cameraAttachment").addEventListener(
+    "change", handleAttachments
+  );
 
-  if (id === "selfpickup") {
-    document.getElementById("cameraPhoto").addEventListener(
-      "change", handlePhoto
-    );
+  document.getElementById("galleryAttachment").addEventListener(
+    "change", handleAttachments
+  );
 
-    document.getElementById("galleryPhoto").addEventListener(
-      "change", handlePhoto
-    );
-  }
+  renderAttachmentPreviews();
 }
 
-// BERSIHKAN FOTO
-function clearSelectedPhotos() {
-  selectedPhotos.forEach(photo => {
-    URL.revokeObjectURL(photo.previewUrl);
-  });
 
-  selectedPhotos = [];
+// ==================================================
+// ESCAPE HTML
+// ==================================================
+
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
 }
 
-// PILIH FOTO
-function handlePhoto(event) {
+
+// ==================================================
+// BERSIHKAN LAMPIRAN
+// ==================================================
+
+function clearSelectedAttachments() {
+  selectedAttachments.forEach(item => {
+    if (item.previewUrl) {
+      URL.revokeObjectURL(item.previewUrl);
+    }
+  });
+
+  selectedAttachments = [];
+}
+
+
+// ==================================================
+// PILIH FOTO / PDF
+// ==================================================
+
+function handleAttachments(event) {
   const files = Array.from(event.target.files || []);
   event.target.value = "";
 
   if (!files.length) return;
 
-  const allowedTypes = [
-    "image/jpeg",
-    "image/png",
-    "image/webp"
-  ];
-
   for (const file of files) {
-    if (!allowedTypes.includes(file.type)) {
-      showToast("Format foto harus JPG, PNG, atau WEBP.", "error");
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      showToast(
+        "Format tidak didukung: " + file.name,
+        "error"
+      );
       continue;
     }
 
-    if (file.size > 8 * 1024 * 1024) {
-      showToast("Ukuran setiap foto maksimal 8 MB.", "error");
+    if (file.size > MAX_FILE_SIZE) {
+      showToast(
+        file.name + " melebihi batas 5 MB.",
+        "error"
+      );
       continue;
     }
 
-    if (selectedPhotos.length >= 10) {
-      showToast("Maksimal 10 foto per transaksi.", "error");
+    if (selectedAttachments.length >= MAX_ATTACHMENTS) {
+      showToast("Maksimal 10 lampiran.", "error");
       break;
     }
 
-    selectedPhotos.push({
+    const currentTotal = selectedAttachments.reduce(
+      (sum, item) => sum + item.file.size,
+      0
+    );
+
+    if (currentTotal + file.size > MAX_TOTAL_SIZE) {
+      showToast("Total lampiran maksimal 20 MB.", "error");
+      continue;
+    }
+
+    selectedAttachments.push({
       file,
       previewUrl: URL.createObjectURL(file)
     });
   }
 
-  renderPhotoPreviews();
+  renderAttachmentPreviews();
 }
 
-// TAMPILKAN PREVIEW
-function renderPhotoPreviews() {
-  const container = document.getElementById("photoPreviewList");
-  const status = document.getElementById("photoStatus");
+
+// ==================================================
+// PREVIEW FOTO DAN PDF
+// ==================================================
+
+function renderAttachmentPreviews() {
+  const container = document.getElementById("attachmentPreviewList");
+  const status = document.getElementById("attachmentStatus");
 
   if (!container || !status) return;
 
   container.innerHTML = "";
 
-  selectedPhotos.forEach((photo, index) => {
+  selectedAttachments.forEach((item, index) => {
     const card = document.createElement("div");
-    card.style.cssText =
-      "position:relative;border:1px solid #ddd;border-radius:8px;padding:5px;";
 
-    const img = document.createElement("img");
-    img.src = photo.previewUrl;
-    img.style.cssText =
-      "width:100%;height:120px;object-fit:cover;border-radius:5px;";
+    card.style.cssText =
+      "border:1px solid #ddd;border-radius:8px;padding:7px;min-width:0;";
+
+    if (item.file.type.startsWith("image/")) {
+      const img = document.createElement("img");
+
+      img.src = item.previewUrl;
+
+      img.style.cssText =
+        "width:100%;height:120px;object-fit:cover;border-radius:5px;";
+
+      card.appendChild(img);
+
+    } else {
+      const pdf = document.createElement("div");
+
+      pdf.style.cssText =
+        "height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff1f1;border-radius:5px;color:#C62828;font-weight:bold;";
+
+      pdf.innerHTML = `
+        <div style="font-size:35px">PDF</div>
+        <div style="font-size:12px">Dokumen PDF</div>
+      `;
+
+      card.appendChild(pdf);
+    }
+
+    const filename = document.createElement("div");
+
+    filename.textContent = item.file.name;
+    filename.style.cssText =
+      "font-size:11px;overflow-wrap:anywhere;margin:5px 0;";
+
+    const size = document.createElement("div");
+
+    size.textContent =
+      (item.file.size / 1024 / 1024).toFixed(2) + " MB";
+
+    size.style.fontSize = "11px";
 
     const remove = document.createElement("button");
+
     remove.type = "button";
     remove.textContent = "HAPUS";
-    remove.style.cssText =
-      "width:100%;margin:5px 0 0;padding:7px;";
+    remove.style.cssText = "width:100%;margin-top:7px;padding:7px;";
 
-    remove.onclick = () => removePhoto(index);
+    remove.onclick = () => removeAttachment(index);
 
-    card.append(img, remove);
+    card.append(filename, size, remove);
     container.appendChild(card);
   });
 
+  const totalSize = selectedAttachments.reduce(
+    (sum, item) => sum + item.file.size,
+    0
+  );
+
   status.textContent =
-    `Foto dipilih: ${selectedPhotos.length}/10`;
+    `Lampiran: ${selectedAttachments.length}/10 | Total: ` +
+    (totalSize / 1024 / 1024).toFixed(2) + " MB";
 }
 
-// HAPUS FOTO
-function removePhoto(index) {
-  const photo = selectedPhotos[index];
-  if (!photo) return;
 
-  URL.revokeObjectURL(photo.previewUrl);
-  selectedPhotos.splice(index, 1);
-  renderPhotoPreviews();
+// ==================================================
+// HAPUS LAMPIRAN
+// ==================================================
+
+function removeAttachment(index) {
+  const item = selectedAttachments[index];
+
+  if (!item) return;
+
+  if (item.previewUrl) {
+    URL.revokeObjectURL(item.previewUrl);
+  }
+
+  selectedAttachments.splice(index, 1);
+  renderAttachmentPreviews();
 }
 
+
+// ==================================================
 // KOMPRES FOTO KE JPEG BASE64
+// PDF TIDAK MELALUI FUNGSI INI
+// ==================================================
+
 async function compressPhoto(file) {
   let bitmap;
 
@@ -415,17 +770,27 @@ async function compressPhoto(file) {
   }
 
   const maxDimension = 1600;
+
   const scale = Math.min(
     1,
     maxDimension / Math.max(bitmap.width, bitmap.height)
   );
 
   const canvas = document.createElement("canvas");
+
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
 
   const ctx = canvas.getContext("2d");
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+  ctx.drawImage(
+    bitmap,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
   bitmap.close();
 
   const blob = await new Promise(resolve => {
@@ -436,12 +801,21 @@ async function compressPhoto(file) {
     throw new Error("Gagal mengompres foto.");
   }
 
-  if (blob.size > 1024 * 1024) {
+  if (blob.size > MAX_FILE_SIZE) {
     throw new Error(
-      "Foto " + file.name + " masih terlalu besar setelah kompresi."
+      "Foto " + file.name + " masih melebihi 5 MB."
     );
   }
 
+  return blob;
+}
+
+
+// ==================================================
+// BACA FILE SEBAGAI BASE64
+// ==================================================
+
+function readFileBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -449,26 +823,37 @@ async function compressPhoto(file) {
       resolve(String(reader.result).split(",")[1]);
     };
 
-    reader.onerror = () => reject(
-      new Error("Gagal membaca hasil kompresi foto.")
-    );
+    reader.onerror = () => {
+      reject(new Error("Gagal membaca file: " + file.name));
+    };
 
-    reader.readAsDataURL(blob);
+    reader.readAsDataURL(file);
   });
 }
 
-// QR SCANNER
+
+// ==================================================
+// QR SCANNER KAMERA
+// ==================================================
+
 async function startScanner() {
+  if (currentStep !== "scan") return;
+  if (cameraStarting || scanner) return;
+
   if (typeof Html5Qrcode === "undefined") {
     showToast("Library QR Scanner belum dimuat.", "error");
     return;
   }
 
-  if (scanner) return;
+  const reader = document.getElementById("reader");
 
-  scanner = new Html5Qrcode("reader");
+  if (!reader) return;
+
+  cameraStarting = true;
 
   try {
+    scanner = new Html5Qrcode("reader");
+
     await scanner.start(
       { facingMode: "environment" },
       {
@@ -476,26 +861,31 @@ async function startScanner() {
         qrbox: { width: 250, height: 250 }
       },
       decodedText => {
-        const input = document.getElementById("doNumber");
-
-        if (input) input.value = decodedText;
-
-        inputMethod = "SCAN";
-
-        const method = document.getElementById("inputMethod");
-        if (method) method.textContent = "Metode input: SCAN";
-
-        stopScanner();
+        handleDOScanned(decodedText);
       },
       () => {}
     );
+
   } catch (error) {
     scanner = null;
-    showToast("Kamera gagal dibuka: " + error, "error");
+
+    console.warn("Kamera scanner:", error);
+
+    showToast(
+      "Kamera tidak tersedia. Gunakan scanner PDA atau INPUT MANUAL.",
+      "error"
+    );
+
+  } finally {
+    cameraStarting = false;
   }
 }
 
+
+// ==================================================
 // TUTUP SCANNER
+// ==================================================
+
 function stopScanner() {
   if (!scanner) return;
 
@@ -507,11 +897,17 @@ function stopScanner() {
     .catch(error => console.warn("Scanner:", error));
 }
 
+
+// ==================================================
 // KEMBALI KE DASHBOARD
+// ==================================================
+
 async function goHome() {
   stopScanner();
+  clearSelectedAttachments();
 
-  clearSelectedPhotos();
+  currentMenu = null;
+  currentStep = "scan";
 
   const user = auth.currentUser;
 
@@ -522,53 +918,44 @@ async function goHome() {
   }
 }
 
-// RESET FORM SETELAH SIMPAN
+
+// ==================================================
+// RESET FORM
+// ==================================================
+
 function resetScanForm(id) {
-  document.getElementById("doNumber").value = "";
+  clearSelectedAttachments();
 
-  document.getElementById("remarks").value = "";
-
-  const logistic = document.getElementById("logisticName");
-  if (logistic) logistic.value = "";
-
-  clearSelectedPhotos();
-
-  const preview = document.getElementById("photoPreviewList");
-  if (preview) preview.innerHTML = "";
-
-  const photoStatus = document.getElementById("photoStatus");
-  if (photoStatus) photoStatus.textContent = "Belum ada foto dipilih (0/10).";
-
-  inputMethod = "MANUAL";
-
-  const method = document.getElementById("inputMethod");
-  if (method) method.textContent = "Metode input: MANUAL";
-
-  const status = document.getElementById("saveStatus");
-  if (status) status.textContent = "";
-
-  const button = document.getElementById("saveButton");
-  if (button) {
-    button.disabled = false;
-    button.textContent = "SIMPAN";
+  if (id === "selfpickup") {
+    renderScanScreen();
+    startScanner();
+    return;
   }
 
-  document.getElementById("doNumber").focus();
+  renderScanScreen();
+  startScanner();
 }
 
+
+// ==================================================
 // SIMPAN TRANSAKSI
+// ==================================================
+
 async function submitScan(id) {
-  const doNumber =
-    document.getElementById("doNumber").value.trim();
+  const doInput = document.getElementById("doNumber");
 
-  const remarks =
-    document.getElementById("remarks").value.trim();
+  const doNumber = doInput
+    ? doInput.value.trim()
+    : "";
 
-  const status =
-    document.getElementById("saveStatus");
+  const remarksInput = document.getElementById("remarks");
 
-  const button =
-    document.getElementById("saveButton");
+  const remarks = remarksInput
+    ? remarksInput.value.trim()
+    : "";
+
+  const status = document.getElementById("saveStatus");
+  const button = document.getElementById("saveButton");
 
   if (!doNumber) {
     showToast("DO Number wajib diisi!", "error");
@@ -580,24 +967,33 @@ async function submitScan(id) {
     return;
   }
 
+  if (id === "selfpickup" && selectedAttachments.length === 0) {
+    showToast("Minimal satu lampiran wajib disertakan!", "error");
+    return;
+  }
+
+  if (id === "selfpickup" && selectedAttachments.length > MAX_ATTACHMENTS) {
+    showToast("Maksimal 10 lampiran.", "error");
+    return;
+  }
+
   let logisticName = "";
 
   if (id === "trucking") {
     const logisticInput = document.getElementById("logisticName");
+
     logisticName = logisticInput
       ? logisticInput.value.trim()
       : "";
   }
 
-  if (id === "selfpickup" && selectedPhotos.length === 0) {
-    showToast("Minimal satu foto DO wajib dilampirkan!", "error");
-    return;
-  }
-
   try {
     button.disabled = true;
     button.textContent = "MENYIMPAN...";
-    status.textContent = "Menyiapkan transaksi...";
+
+    if (status) {
+      status.textContent = "Menyiapkan transaksi...";
+    }
 
     const token = await auth.currentUser.getIdToken();
 
@@ -612,40 +1008,60 @@ async function submitScan(id) {
     };
 
     if (id === "selfpickup") {
-      if (selectedPhotos.length > 10) {
-        throw new Error("Maksimal 10 foto.");
-      }
+      const attachments = [];
 
-      status.textContent =
-        `Mengompres ${selectedPhotos.length} foto...`;
+      for (let i = 0; i < selectedAttachments.length; i++) {
+        const item = selectedAttachments[i];
+        const file = item.file;
 
-      const photos = [];
+        if (status) {
+          status.textContent =
+            `Menyiapkan lampiran ${i + 1}/${selectedAttachments.length}...`;
+        }
 
-      for (const photo of selectedPhotos) {
-        const photoBase64 = await compressPhoto(photo.file);
+        let blob;
+        let mimeType;
 
-        photos.push({
-          photoBase64,
-          photoMimeType: "image/jpeg"
+        if (file.type.startsWith("image/")) {
+          blob = await compressPhoto(file);
+          mimeType = "image/jpeg";
+
+        } else if (file.type === "application/pdf") {
+          blob = file;
+          mimeType = "application/pdf";
+
+        } else {
+          throw new Error("Format lampiran tidak didukung.");
+        }
+
+        const fileBase64 = await readFileBase64(blob);
+
+        attachments.push({
+          fileBase64,
+          mimeType
         });
       }
 
-      const totalBytes = photos.reduce(
-        (total, photo) =>
-          total + Math.ceil(photo.photoBase64.length * 0.75),
+      if (status) {
+        status.textContent = "Memeriksa ukuran lampiran...";
+      }
+
+      const totalBytes = attachments.reduce(
+        (sum, item) =>
+          sum + Math.floor(item.fileBase64.length * 0.75),
         0
       );
 
-      if (totalBytes > 8 * 1024 * 1024) {
-        throw new Error(
-          "Total ukuran foto melebihi 8 MB. Kurangi jumlah atau ukuran foto."
-        );
+      if (totalBytes > MAX_TOTAL_SIZE) {
+        throw new Error("Total lampiran melebihi 20 MB.");
       }
 
-      payload.photos = photos;
+      payload.attachments = attachments;
     }
 
-    status.textContent = "Mengirim transaksi...";
+    if (status) {
+      status.textContent = "Mengirim transaksi ke server...";
+    }
 
     const result = await callAppsScript(payload);
 
@@ -663,11 +1079,15 @@ async function submitScan(id) {
   } catch (error) {
     console.error("Simpan transaksi:", error);
 
-    status.textContent = error.message;
+    if (status) {
+      status.textContent = error.message;
+    }
 
     showToast("Gagal menyimpan: " + error.message, "error");
 
-    button.disabled = false;
-    button.textContent = "SIMPAN";
+    if (button) {
+      button.disabled = false;
+      button.textContent = "SIMPAN TRANSAKSI";
+    }
   }
 }

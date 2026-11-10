@@ -27,7 +27,6 @@ let currentUser = null;
 let currentMenu = null;
 let currentStep = "scan";
 let cameraStarting = false;
-let documentationStream = null;
 let qrCameraId = null;
 let submitting = false;
 
@@ -164,7 +163,6 @@ function showToast(message, type = "success") {
 
 function showLogin(message = "") {
   stopScanner();
-  stopDocumentationCamera();
   clearSelectedAttachments();
 
   main.innerHTML = `
@@ -222,7 +220,6 @@ async function verifyAccess(user) {
 
 function showDashboard() {
   stopScanner();
-  stopDocumentationCamera();
   clearSelectedAttachments();
 
   main.innerHTML = originalDashboard;
@@ -240,7 +237,6 @@ function showDashboard() {
 
   logout.onclick = async () => {
     await stopScanner();
-    stopDocumentationCamera();
     await auth.signOut();
   };
 
@@ -278,7 +274,6 @@ async function openMenu(id) {
   if (!menus.find(item => item.id === id)) return;
 
   await stopScanner();
-  await stopDocumentationCamera();
   clearSelectedAttachments();
 
   currentMenu = id;
@@ -538,29 +533,42 @@ function openSelfPickupDocumentation() {
 
       <input type="hidden" id="doNumber" value="${escapeHTML(doNumber)}">
 
-      <h3>Kamera Dokumentasi</h3>
+      <h3>Dokumentasi DO</h3>
 
-      <video id="documentationVideo"
-        autoplay playsinline muted
-        style="width:100%;background:#222;border-radius:10px;min-height:200px;object-fit:contain">
-      </video>
+      <p>Ambil foto menggunakan kamera bawaan HP atau pilih foto/PDF dari perangkat.</p>
 
-      <p id="cameraStatus">Mengaktifkan kamera...</p>
+      <!-- KAMERA NATIVE ANDROID -->
+      <input
+        type="file"
+        id="cameraAttachment"
+        accept="image/*"
+        capture="environment"
+        style="display:none"
+      >
 
-      <button type="button" id="capturePhotoButton"
-        style="width:100%;background:#C62828;color:white;padding:14px;border:0;border-radius:7px;font-weight:bold">
+      <button
+        type="button"
+        id="capturePhotoButton"
+        style="width:100%;background:#C62828;color:white;padding:14px;border:0;border-radius:7px;font-weight:bold;margin:10px 0"
+      >
         AMBIL FOTO
       </button>
 
+      <!-- UPLOAD GALERI DAN PDF -->
       <div style="margin:15px 0">
-        <label style="display:block;background:#444;color:white;padding:12px;border-radius:7px;cursor:pointer;text-align:center">
+        <label style="display:block;background:#444;color:white;padding:14px;border-radius:7px;cursor:pointer;text-align:center;font-weight:bold">
           UPLOAD FOTO / PDF
           <input type="file"
             id="galleryAttachment"
             accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
-            multiple hidden>
+            multiple
+            hidden>
         </label>
       </div>
+
+      <p id="cameraStatus" style="color:#555">
+        Kamera akan dibuka melalui aplikasi kamera bawaan HP.
+      </p>
 
       <div id="attachmentPreviewList"
         style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
@@ -584,212 +592,26 @@ function openSelfPickupDocumentation() {
     </section>
   `;
 
-  document.getElementById("galleryAttachment").addEventListener(
-    "change", handleAttachments
+  document.getElementById("cameraAttachment").addEventListener(
+    "change",
+    handleAttachments
   );
 
-  document.getElementById("capturePhotoButton").onclick =
-    captureDocumentationPhoto;
+  document.getElementById("galleryAttachment").addEventListener(
+    "change",
+    handleAttachments
+  );
 
-  renderAttachmentPreviews();
-
-  startDocumentationCamera();
-}
-
-
-// ==================================================
-// KAMERA DOKUMENTASI: GUNAKAN KAMERA QR YANG SAMA
-// ==================================================
-
-async function startDocumentationCamera() {
-  const video = document.getElementById("documentationVideo");
-  const status = document.getElementById("cameraStatus");
-
-  if (!video || !navigator.mediaDevices?.getUserMedia) {
-    if (status) {
-      status.textContent =
-        "Kamera tidak didukung. Gunakan Upload Foto / PDF.";
-    }
-    return;
-  }
-
-  try {
-    await stopDocumentationCamera();
-
-    // Gunakan kamera yang sama dengan QR jika ID tersedia.
-    const videoConstraints = {
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-      aspectRatio: { ideal: 16 / 9 }
-    };
-
-    if (qrCameraId) {
-      videoConstraints.deviceId = {
-        exact: qrCameraId
-      };
-    } else {
-      videoConstraints.facingMode = {
-        ideal: "environment"
-      };
-    }
-
-    documentationStream =
-      await navigator.mediaDevices.getUserMedia({
-        video: videoConstraints,
-        audio: false
-      });
-
-    const track = documentationStream.getVideoTracks()[0];
-
-    // Usahakan zoom normal 1x jika didukung kamera.
-    if (track && typeof track.getCapabilities === "function") {
-      const capabilities = track.getCapabilities();
-
-      if (
-        capabilities.zoom &&
-        capabilities.zoom.min <= 1 &&
-        capabilities.zoom.max >= 1
-      ) {
-        try {
-          await track.applyConstraints({
-            advanced: [{ zoom: 1 }]
-          });
-        } catch (zoomError) {
-          console.warn(
-            "Zoom 1x tidak dapat diterapkan:",
-            zoomError
-          );
-        }
-      }
-    }
-
-    // Pastikan halaman dokumentasi masih aktif.
-    if (
-      !document.getElementById("documentationVideo") ||
-      currentStep !== "documentation"
-    ) {
-      await stopDocumentationCamera();
+  document.getElementById("capturePhotoButton").onclick = () => {
+    if (selectedAttachments.length >= MAX_ATTACHMENTS) {
+      showToast("Maksimal 10 lampiran.", "error");
       return;
     }
 
-    video.srcObject = documentationStream;
-
-    // Hindari tampilan video yang diperbesar atau terpotong.
-    video.style.width = "100%";
-    video.style.height = "auto";
-    video.style.objectFit = "contain";
-    video.style.transform = "none";
-
-    await video.play();
-
-    const settings = track ? track.getSettings() : {};
-
-    console.log("DOKUMENTASI CAMERA SETTINGS:", {
-      deviceId: settings.deviceId,
-      width: settings.width,
-      height: settings.height,
-      zoom: settings.zoom,
-      facingMode: settings.facingMode
-    });
-
-    if (status) {
-      status.textContent =
-        "Kamera dokumentasi siap digunakan.";
-    }
-
-  } catch (error) {
-    console.error("Kamera dokumentasi:", error);
-
-    await stopDocumentationCamera();
-
-    if (status) {
-      status.textContent =
-        "Kamera gagal dibuka. Periksa izin kamera atau gunakan Upload Foto / PDF.";
-    }
-  }
-}
-
-async function stopDocumentationCamera() {
-  if (!documentationStream) return;
-
-  documentationStream.getTracks().forEach(track => {
-    track.stop();
-  });
-
-  documentationStream = null;
-}
-
-
-// ==================================================
-// AMBIL FOTO
-// ==================================================
-
-async function captureDocumentationPhoto() {
-  const video = document.getElementById("documentationVideo");
-
-  if (!video || !video.videoWidth || !video.videoHeight) {
-    showToast("Kamera belum siap.", "error");
-    return;
-  }
-
-  if (selectedAttachments.length >= MAX_ATTACHMENTS) {
-    showToast("Maksimal 10 lampiran.", "error");
-    return;
-  }
-
-  const canvas = document.createElement("canvas");
-
-  // Gunakan ukuran asli video, jangan dipaksa menjadi rasio lain.
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-
-  const context = canvas.getContext("2d");
-
-  context.drawImage(
-    video,
-    0,
-    0,
-    canvas.width,
-    canvas.height
-  );
-
-  const blob = await new Promise(resolve => {
-    canvas.toBlob(resolve, "image/jpeg", 0.85);
-  });
-
-  if (!blob) {
-    showToast("Gagal mengambil foto.", "error");
-    return;
-  }
-
-  if (blob.size > MAX_FILE_SIZE) {
-    showToast("Ukuran foto melebihi 5 MB.", "error");
-    return;
-  }
-
-  const currentTotal = selectedAttachments.reduce(
-    (sum, item) => sum + item.file.size,
-    0
-  );
-
-  if (currentTotal + blob.size > MAX_TOTAL_SIZE) {
-    showToast("Total lampiran melebihi 20 MB.", "error");
-    return;
-  }
-
-  const file = new File(
-    [blob],
-    "DO_" + Date.now() + ".jpg",
-    { type: "image/jpeg" }
-  );
-
-  selectedAttachments.push({
-    file,
-    previewUrl: URL.createObjectURL(file)
-  });
+    document.getElementById("cameraAttachment").click();
+  };
 
   renderAttachmentPreviews();
-  showToast("Foto berhasil ditambahkan.");
 }
 
 
@@ -1067,7 +889,6 @@ async function startScanner() {
       () => {}
     );
 
-    // Simpan deviceId kamera yang benar-benar dipakai QR.
     try {
       const settings = scanner.getRunningTrackSettings();
 
@@ -1120,7 +941,6 @@ async function stopScanner() {
 
 async function goHome() {
   await stopScanner();
-  await stopDocumentationCamera();
 
   clearSelectedAttachments();
 
@@ -1144,7 +964,6 @@ async function goHome() {
 
 async function resetScanForm(id) {
   await stopScanner();
-  await stopDocumentationCamera();
 
   clearSelectedAttachments();
 

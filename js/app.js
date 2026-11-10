@@ -27,6 +27,7 @@ let currentUser = null;
 let currentMenu = null;
 let currentStep = "scan";
 let cameraStarting = false;
+let documentationStream = null;
 
 const main = document.querySelector("main");
 const originalDashboard = main.innerHTML;
@@ -96,6 +97,7 @@ function callAppsScript(payload) {
       }
 
       if (!result || result.requestId !== requestId) return;
+
       finish(resolve, result);
     };
 
@@ -123,6 +125,7 @@ function showToast(message, type = "success") {
   if (!toast) {
     toast = document.createElement("div");
     toast.id = "sanyToast";
+
     toast.style.cssText = `
       position:fixed;
       left:50%;
@@ -138,6 +141,7 @@ function showToast(message, type = "success") {
       text-align:center;
       box-shadow:0 4px 15px #0003;
     `;
+
     document.body.appendChild(toast);
   }
 
@@ -161,6 +165,7 @@ function showToast(message, type = "success") {
 
 function showLogin(message = "") {
   stopScanner();
+  stopDocumentationCamera();
   clearSelectedAttachments();
 
   main.innerHTML = `
@@ -218,6 +223,7 @@ async function verifyAccess(user) {
 
 function showDashboard() {
   stopScanner();
+  stopDocumentationCamera();
   clearSelectedAttachments();
 
   main.innerHTML = originalDashboard;
@@ -235,6 +241,7 @@ function showDashboard() {
 
   logout.onclick = async () => {
     stopScanner();
+    stopDocumentationCamera();
     await auth.signOut();
   };
 
@@ -265,7 +272,7 @@ auth.onAuthStateChanged(user => {
 // BUKA MENU
 // ==================================================
 
-function openMenu(id) {
+async function openMenu(id) {
   if (!currentUser) {
     showLogin("Silakan login terlebih dahulu.");
     return;
@@ -274,7 +281,8 @@ function openMenu(id) {
   const menu = menus.find(item => item.id === id);
   if (!menu) return;
 
-  stopScanner();
+  await stopScanner();
+  stopDocumentationCamera();
   clearSelectedAttachments();
 
   currentMenu = id;
@@ -282,7 +290,12 @@ function openMenu(id) {
   inputMethod = "MANUAL";
 
   renderScanScreen();
-  startScanner();
+
+  await startScanner();
+
+  // Fokus input agar scanner PDA keyboard-wedge bisa mengirim hasil.
+  const input = document.getElementById("doNumber");
+  if (input) input.focus();
 }
 
 
@@ -365,13 +378,14 @@ function renderScanScreen() {
   const doInput = document.getElementById("doNumber");
 
   doInput.addEventListener("keydown", event => {
-    // Scanner PDA biasanya mengirim Enter setelah barcode.
     if (event.key === "Enter") {
       event.preventDefault();
 
+      if (currentStep !== "scan") return;
+
       const value = doInput.value.trim();
 
-      if (value && currentStep === "scan") {
+      if (value && inputMethod !== "MANUAL") {
         inputMethod = "SCAN";
         handleDOScanned(value);
       }
@@ -381,7 +395,7 @@ function renderScanScreen() {
   if (currentMenu === "trucking") {
     document.getElementById("logisticName").addEventListener(
       "focus",
-      stopScanner
+      () => stopScanner()
     );
   }
 }
@@ -407,14 +421,38 @@ function switchToManual() {
     method.textContent = "Metode input: MANUAL";
   }
 
-  if (button) {
-    button.textContent = "KEMBALI KE SCAN";
-    button.onclick = returnToScan;
-  }
-
   if (input) {
     input.placeholder = "Ketik DO Number secara manual";
     input.focus();
+  }
+
+  if (currentMenu === "selfpickup") {
+    if (button) {
+      button.textContent = "KEMBALI KE SCAN";
+      button.onclick = returnToScan;
+    }
+
+    let continueButton = document.getElementById("continuePhotoButton");
+
+    if (!continueButton) {
+      continueButton = document.createElement("button");
+      continueButton.id = "continuePhotoButton";
+      continueButton.type = "button";
+      continueButton.textContent = "LANJUT KE FOTO";
+
+      continueButton.style.cssText =
+        "width:100%;margin-top:12px;background:#218838;color:white;padding:14px;border:0;border-radius:7px;font-weight:bold;";
+
+      continueButton.onclick = continueManualSelfPickup;
+
+      button.insertAdjacentElement("afterend", continueButton);
+    }
+
+  } else {
+    if (button) {
+      button.textContent = "KEMBALI KE SCAN";
+      button.onclick = returnToScan;
+    }
   }
 }
 
@@ -423,15 +461,20 @@ function switchToManual() {
 // KEMBALI KE SCAN
 // ==================================================
 
-function returnToScan() {
-  const input = document.getElementById("doNumber");
+async function returnToScan() {
+  await stopScanner();
 
+  const input = document.getElementById("doNumber");
   if (input) input.value = "";
 
   inputMethod = "MANUAL";
 
   renderScanScreen();
-  startScanner();
+
+  await startScanner();
+
+  const doInput = document.getElementById("doNumber");
+  if (doInput) doInput.focus();
 }
 
 
@@ -439,18 +482,17 @@ function returnToScan() {
 // HASIL SCAN QR / PDA
 // ==================================================
 
-function handleDOScanned(value) {
+async function handleDOScanned(value) {
   const doNumber = String(value || "").trim();
 
-  if (!doNumber) return;
-
-  stopScanner();
+  if (!doNumber || currentStep !== "scan") return;
 
   const input = document.getElementById("doNumber");
-
   if (input) input.value = doNumber;
 
   inputMethod = "SCAN";
+
+  await stopScanner();
 
   const method = document.getElementById("inputMethod");
 
@@ -489,8 +531,6 @@ function continueManualSelfPickup() {
 // ==================================================
 
 function openSelfPickupDocumentation() {
-  stopScanner();
-
   const doInput = document.getElementById("doNumber");
   const doNumber = doInput ? doInput.value.trim() : "";
 
@@ -514,21 +554,25 @@ function openSelfPickupDocumentation() {
         <p>Metode input: ${inputMethod}</p>
       </div>
 
-      <h3>Dokumentasi DO</h3>
+      <!-- DO NUMBER DISIMPAN UNTUK PROSES SUBMIT -->
+      <input type="hidden" id="doNumber" value="${escapeHTML(doNumber)}">
 
-      <p>Ambil foto langsung atau pilih foto/PDF dari perangkat.</p>
+      <h3>Kamera Dokumentasi</h3>
 
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">
+      <video id="documentationVideo"
+        autoplay playsinline muted
+        style="width:100%;background:#222;border-radius:10px;min-height:200px;object-fit:cover">
+      </video>
 
-        <label style="background:#C62828;color:white;padding:12px;border-radius:7px;cursor:pointer">
-          KAMERA
-          <input type="file"
-            id="cameraAttachment"
-            accept="image/*"
-            capture="environment"
-            multiple
-            hidden>
-        </label>
+      <p id="cameraStatus">Mengaktifkan kamera dokumentasi...</p>
+
+      <button type="button"
+        id="capturePhotoButton"
+        style="width:100%;background:#C62828;color:white;padding:14px;border:0;border-radius:7px;font-weight:bold">
+        AMBIL FOTO
+      </button>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin:15px 0">
 
         <label style="background:#444;color:white;padding:12px;border-radius:7px;cursor:pointer">
           UPLOAD FOTO / PDF
@@ -565,15 +609,150 @@ function openSelfPickupDocumentation() {
     </section>
   `;
 
-  document.getElementById("cameraAttachment").addEventListener(
-    "change", handleAttachments
-  );
-
   document.getElementById("galleryAttachment").addEventListener(
     "change", handleAttachments
   );
 
+  document.getElementById("capturePhotoButton").onclick =
+    captureDocumentationPhoto;
+
   renderAttachmentPreviews();
+
+  startDocumentationCamera();
+}
+
+
+// ==================================================
+// KAMERA DOKUMENTASI
+// ==================================================
+
+async function startDocumentationCamera() {
+  const video = document.getElementById("documentationVideo");
+  const status = document.getElementById("cameraStatus");
+
+  if (!video || !navigator.mediaDevices ||
+      !navigator.mediaDevices.getUserMedia) {
+    if (status) {
+      status.textContent =
+        "Kamera tidak didukung. Gunakan Upload Foto / PDF.";
+    }
+    return;
+  }
+
+  try {
+    await stopDocumentationCamera();
+
+    documentationStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" }
+      },
+      audio: false
+    });
+
+    if (!document.getElementById("documentationVideo")) {
+      stopDocumentationCamera();
+      return;
+    }
+
+    video.srcObject = documentationStream;
+    await video.play();
+
+    if (status) {
+      status.textContent = "Kamera siap digunakan.";
+    }
+
+  } catch (error) {
+    console.error("Kamera dokumentasi:", error);
+
+    if (status) {
+      status.textContent =
+        "Kamera tidak dapat dibuka. Periksa izin kamera atau gunakan Upload Foto / PDF.";
+    }
+  }
+}
+
+
+async function stopDocumentationCamera() {
+  if (!documentationStream) return;
+
+  documentationStream.getTracks().forEach(track => {
+    track.stop();
+  });
+
+  documentationStream = null;
+}
+
+
+// ==================================================
+// AMBIL FOTO DARI LIVE CAMERA
+// ==================================================
+
+async function captureDocumentationPhoto() {
+  const video = document.getElementById("documentationVideo");
+
+  if (!video || !video.videoWidth) {
+    showToast("Kamera belum siap.", "error");
+    return;
+  }
+
+  if (selectedAttachments.length >= MAX_ATTACHMENTS) {
+    showToast("Maksimal 10 lampiran.", "error");
+    return;
+  }
+
+  const canvas = document.createElement("canvas");
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  const context = canvas.getContext("2d");
+
+  context.drawImage(
+    video,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  const blob = await new Promise(resolve => {
+    canvas.toBlob(resolve, "image/jpeg", 0.85);
+  });
+
+  if (!blob) {
+    showToast("Gagal mengambil foto.", "error");
+    return;
+  }
+
+  if (blob.size > MAX_FILE_SIZE) {
+    showToast("Ukuran foto melebihi 5 MB.", "error");
+    return;
+  }
+
+  const currentTotal = selectedAttachments.reduce(
+    (sum, item) => sum + item.file.size,
+    0
+  );
+
+  if (currentTotal + blob.size > MAX_TOTAL_SIZE) {
+    showToast("Total lampiran melebihi 20 MB.", "error");
+    return;
+  }
+
+  const file = new File(
+    [blob],
+    "DO_" + Date.now() + ".jpg",
+    { type: "image/jpeg" }
+  );
+
+  selectedAttachments.push({
+    file,
+    previewUrl: URL.createObjectURL(file)
+  });
+
+  renderAttachmentPreviews();
+
+  showToast("Foto berhasil ditambahkan.");
 }
 
 
@@ -619,18 +798,12 @@ function handleAttachments(event) {
 
   for (const file of files) {
     if (!ALLOWED_TYPES.includes(file.type)) {
-      showToast(
-        "Format tidak didukung: " + file.name,
-        "error"
-      );
+      showToast("Format tidak didukung: " + file.name, "error");
       continue;
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      showToast(
-        file.name + " melebihi batas 5 MB.",
-        "error"
-      );
+      showToast(file.name + " melebihi batas 5 MB.", "error");
       continue;
     }
 
@@ -751,13 +924,14 @@ function removeAttachment(index) {
   }
 
   selectedAttachments.splice(index, 1);
+
   renderAttachmentPreviews();
 }
 
 
 // ==================================================
-// KOMPRES FOTO KE JPEG BASE64
-// PDF TIDAK MELALUI FUNGSI INI
+// KOMPRES FOTO KE JPEG
+// PDF TIDAK DIKOMPRES
 // ==================================================
 
 async function compressPhoto(file) {
@@ -869,7 +1043,7 @@ async function startScanner() {
   } catch (error) {
     scanner = null;
 
-    console.warn("Kamera scanner:", error);
+    console.warn("Scanner kamera:", error);
 
     showToast(
       "Kamera tidak tersedia. Gunakan scanner PDA atau INPUT MANUAL.",
@@ -883,18 +1057,21 @@ async function startScanner() {
 
 
 // ==================================================
-// TUTUP SCANNER
+// TUTUP SCANNER DAN TUNGGU KAMERA LEPAS
 // ==================================================
 
-function stopScanner() {
+async function stopScanner() {
   if (!scanner) return;
 
   const currentScanner = scanner;
   scanner = null;
 
-  currentScanner.stop()
-    .then(() => currentScanner.clear())
-    .catch(error => console.warn("Scanner:", error));
+  try {
+    await currentScanner.stop();
+    await currentScanner.clear();
+  } catch (error) {
+    console.warn("Scanner:", error);
+  }
 }
 
 
@@ -903,7 +1080,9 @@ function stopScanner() {
 // ==================================================
 
 async function goHome() {
-  stopScanner();
+  await stopScanner();
+  await stopDocumentationCamera();
+
   clearSelectedAttachments();
 
   currentMenu = null;
@@ -920,20 +1099,24 @@ async function goHome() {
 
 
 // ==================================================
-// RESET FORM
+// RESET FORM SETELAH SIMPAN
 // ==================================================
 
-function resetScanForm(id) {
+async function resetScanForm(id) {
+  await stopScanner();
+  await stopDocumentationCamera();
+
   clearSelectedAttachments();
 
-  if (id === "selfpickup") {
-    renderScanScreen();
-    startScanner();
-    return;
-  }
+  currentStep = "scan";
+  inputMethod = "MANUAL";
 
   renderScanScreen();
-  startScanner();
+
+  await startScanner();
+
+  const input = document.getElementById("doNumber");
+  if (input) input.focus();
 }
 
 
@@ -989,7 +1172,7 @@ async function submitScan(id) {
 
   try {
     button.disabled = true;
-    button.textContent = "MENYIMPAN...";
+    button.textContent = "MENYIAPKAN...";
 
     if (status) {
       status.textContent = "Menyiapkan transaksi...";
@@ -1042,10 +1225,6 @@ async function submitScan(id) {
         });
       }
 
-      if (status) {
-        status.textContent = "Memeriksa ukuran lampiran...";
-      }
-
       const totalBytes = attachments.reduce(
         (sum, item) =>
           sum + Math.floor(item.fileBase64.length * 0.75),
@@ -1063,13 +1242,15 @@ async function submitScan(id) {
       status.textContent = "Mengirim transaksi ke server...";
     }
 
+    button.textContent = "MENGIRIM...";
+
     const result = await callAppsScript(payload);
 
     if (!result.success) {
       throw new Error(result.message || "Penyimpanan gagal.");
     }
 
-    resetScanForm(id);
+    await resetScanForm(id);
 
     showToast(
       result.message || "Transaksi berhasil disimpan.",

@@ -1,1 +1,114 @@
+:root {
+  --sany-red: #d71920;
+  --sany-red-dark: #a90000;
+  --sany-ease: cubic-bezier(.2, .75, .25, 1);
+}
 
+@keyframes sanyFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sanyCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sanySpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes sanyPulse {
+  0%, 100% { opacity: .55; }
+  50% { opacity: 1; }
+}
+
+@keyframes sanyToastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px) scale(.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+main.container > * {
+  animation: sanyFadeUp 420ms var(--sany-ease) both;
+}
+
+.menu .item {
+  animation: sanyCardIn 420ms var(--sany-ease) both;
+  transition: transform 260ms var(--sany-ease),
+              box-shadow 260ms var(--sany-ease);
+}
+
+.menu .item:nth-child(1) { animation-delay: 40ms; }
+.menu .item:nth-child(2) { animation-delay: 90ms; }
+.menu .item:nth-child(3) { animation-delay: 140ms; }
+.menu .item:nth-child(4) { animation-delay: 190ms; }
+.menu .item:nth-child(5) { animation-delay: 240ms; }
+
+.menu .item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 24px rgba(0,0,0,.11);
+}
+
+button {
+  transition: transform 160ms ease,
+              box-shadow 160ms ease,
+              background-color 160ms ease;
+}
+
+button:hover:not(:disabled) {
+  background-color: #bd1118;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 11px rgba(167,0,0,.18);
+}
+
+button:active:not(:disabled) {
+  transform: scale(.975);
+}
+
+.form-scan {
+  animation: sanyFadeUp 340ms var(--sany-ease) both;
+}
+
+#sanyToast {
+  animation: sanyToastIn 220ms var(--sany-ease) both;
+}
+
+#reader {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--sany-red);
+  box-shadow: 0 0 0 3px rgba(215,25,32,.10);
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

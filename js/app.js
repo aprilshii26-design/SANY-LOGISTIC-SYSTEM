@@ -615,12 +615,17 @@ auth.onAuthStateChanged(user => {
 
   if (user) {
 
-    main.innerHTML =
-      "<p style='text-align:center;padding:50px'>" +
-      "Memeriksa akses...</p>";
+main.innerHTML = `
+  <section class="sany-loader-screen" role="status" aria-live="polite">
+    <div class="sany-loader-card">
+      <div class="sany-spinner" aria-hidden="true"></div>
+      <h2>Memeriksa akses...</h2>
+      <p>Mohon tunggu sebentar</p>
+    </div>
+  </section>
+`;
 
-    verifyAccess(user);
-
+verifyAccess(user);
   } else {
 
     currentUser = null;

@@ -256,7 +256,7 @@ body {
   gap: 16px;
 }
 
-.sany-menu-item {
+.menu .item.sany-menu-item {
   min-height: 126px;
   display: flex;
   align-items: center;
@@ -309,13 +309,13 @@ body {
 .sany-menu-copy p { margin: 0; color: #555; font-size: 15px; line-height: 1.35; }
 .sany-menu-arrow { color: var(--sany-red); font-size: 36px; line-height: 1; font-weight: 300; }
 
-.sany-menu-item:hover {
+.menu .item.sany-menu-item:hover {
   transform: translateY(-3px);
   box-shadow: 0 10px 24px rgba(0,0,0,.11);
 }
 
-.sany-menu-item:active { transform: scale(.99); }
-.sany-menu-item:focus-visible { outline: 3px solid rgba(215,25,32,.25); outline-offset: 3px; }
+.menu .item.sany-menu-item:active { transform: scale(.99); }
+.menu .item.sany-menu-item:focus-visible { outline: 3px solid rgba(215,25,32,.25); outline-offset: 3px; }
 
 footer.sany-footer {
   text-align: center;
@@ -344,7 +344,7 @@ footer.sany-footer {
   .container { margin: 18px auto; padding: 16px; }
   .welcome h2 { font-size: 27px; }
   .welcome p { font-size: 16px; }
-  .sany-menu-item { min-height: 112px; gap: 12px; padding: 14px 12px; border-radius: 17px; }
+  .menu .item.sany-menu-item { min-height: 112px; gap: 12px; padding: 14px 12px; border-radius: 17px; }
   .sany-menu-icon { width: 76px; height: 76px; min-width: 76px; border-radius: 14px; }
   .sany-menu-icon svg { width: 62px; height: 62px; }
   .sany-menu-copy { padding-left: 12px; }
@@ -355,5 +355,5 @@ footer.sany-footer {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sany-menu-item { transition: none !important; }
+  .menu .item.sany-menu-item { transition: none !important; }
 }

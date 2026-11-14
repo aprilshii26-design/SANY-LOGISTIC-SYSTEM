@@ -1,0 +1,138 @@
+/* =========================================================
+   SANY LOGISTIC SYSTEM — UI MOTION & POLISH
+   File: style.css
+   Catatan: CSS tambahan. Tidak mengubah proses scan/transaksi.
+   ========================================================= */
+
+:root {
+  --sany-red: #d71920;
+  --sany-red-dark: #a90000;
+  --sany-surface: #ffffff;
+  --sany-text: #222222;
+  --sany-muted: #666666;
+  --sany-shadow: 0 5px 18px rgba(0, 0, 0, 0.08);
+  --sany-motion-fast: 160ms;
+  --sany-motion-normal: 240ms;
+  --sany-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Page entry: also applies when app.js replaces main content */
+main.container > * {
+  animation: sanyFadeUp 360ms var(--sany-ease) both;
+}
+
+main.container > *:nth-child(2) { animation-delay: 45ms; }
+main.container > *:nth-child(3) { animation-delay: 90ms; }
+
+@keyframes sanyFadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sanyToastIn {
+  from { opacity: 0; transform: translate(-50%, 12px) scale(.97); }
+  to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+/* Dashboard menu cards */
+.menu .item {
+  transition:
+    transform var(--sany-motion-normal) var(--sany-ease),
+    box-shadow var(--sany-motion-normal) var(--sany-ease),
+    border-color var(--sany-motion-normal) var(--sany-ease);
+  will-change: transform;
+}
+
+.menu .item:active {
+  transform: translateY(0) scale(.985);
+}
+
+.menu .item:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(215, 25, 32, .22);
+  outline-offset: 2px;
+}
+
+/* Buttons */
+button {
+  transition:
+    transform var(--sany-motion-fast) ease,
+    box-shadow var(--sany-motion-fast) ease,
+    background-color var(--sany-motion-fast) ease,
+    opacity var(--sany-motion-fast) ease;
+}
+
+button:hover:not(:disabled) {
+  background-color: #bd1118;
+  box-shadow: 0 3px 9px rgba(167, 0, 0, .18);
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0) scale(.98);
+  box-shadow: none;
+}
+
+button:disabled {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Form controls */
+input, textarea {
+  transition:
+    border-color var(--sany-motion-fast) ease,
+    box-shadow var(--sany-motion-fast) ease,
+    background-color var(--sany-motion-fast) ease;
+}
+
+input:focus, textarea:focus {
+  border-color: var(--sany-red);
+  box-shadow: 0 0 0 3px rgba(215, 25, 32, .10);
+  outline: none;
+}
+
+/* Scan forms and dynamically-rendered cards */
+.form-scan {
+  animation: sanyFadeUp 300ms var(--sany-ease) both;
+}
+
+.form-scan h2 {
+  animation: sanyFadeUp 360ms var(--sany-ease) both;
+}
+
+#sanyToast {
+  animation: sanyToastIn 220ms var(--sany-ease) both;
+  will-change: transform, opacity;
+}
+
+/* Scanner area: keep its dimensions and interaction untouched */
+#reader {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Respect accessibility preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Small screens */
+@media (max-width: 600px) {
+  .menu .item:hover {
+    transform: none;
+  }
+
+  button:hover:not(:disabled) {
+    transform: none;
+  }
+}

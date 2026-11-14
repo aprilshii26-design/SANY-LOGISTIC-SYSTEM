@@ -4,6 +4,8 @@
   --sany-ease: cubic-bezier(.2, .75, .25, 1);
 }
 
+/* ===== ANIMATIONS ===== */
+
 @keyframes sanyFadeUp {
   from {
     opacity: 0;
@@ -46,14 +48,30 @@
   }
 }
 
+/* ===== GLOBAL ===== */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f4f5f7;
+  color: #222;
+}
+
 main.container > * {
   animation: sanyFadeUp 420ms var(--sany-ease) both;
 }
 
+/* ===== MENU ANIMATION ===== */
+
 .menu .item {
   animation: sanyCardIn 420ms var(--sany-ease) both;
-  transition: transform 260ms var(--sany-ease),
-              box-shadow 260ms var(--sany-ease);
+  transition:
+    transform 260ms var(--sany-ease),
+    box-shadow 260ms var(--sany-ease);
 }
 
 .menu .item:nth-child(1) { animation-delay: 40ms; }
@@ -67,10 +85,13 @@ main.container > * {
   box-shadow: 0 10px 24px rgba(0,0,0,.11);
 }
 
+/* ===== BUTTON ===== */
+
 button {
-  transition: transform 160ms ease,
-              box-shadow 160ms ease,
-              background-color 160ms ease;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
 }
 
 button:hover:not(:disabled) {
@@ -82,6 +103,8 @@ button:hover:not(:disabled) {
 button:active:not(:disabled) {
   transform: scale(.975);
 }
+
+/* ===== FORM & SCANNER ===== */
 
 .form-scan {
   animation: sanyFadeUp 340ms var(--sany-ease) both;
@@ -103,15 +126,7 @@ textarea:focus {
   outline: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: .01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: .01ms !important;
-  }
-}
+/* ===== LOADING SCREEN ===== */
 
 .sany-loader-screen {
   min-height: 52vh;
@@ -155,16 +170,7 @@ textarea:focus {
   animation: sanyPulse 1.5s ease-in-out infinite;
 }
 
-
-/* ===== SANY brand and dashboard refinement ===== */
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f4f5f7;
-  color: #222;
-}
+/* ===== SANY BRAND HEADER ===== */
 
 .sany-brand-header {
   min-height: 150px;
@@ -192,37 +198,51 @@ body {
   pointer-events: none;
 }
 
+/* ===== OFFICIAL SANY LOGO ===== */
+
 .sany-brand-mark {
   width: 126px;
   min-width: 126px;
+  height: 110px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  color: #fff;
+  justify-content: center;
+  overflow: hidden;
 }
 
-.sany-brand-mark svg {
-  width: 72px;
-  height: 72px;
-  fill: none;
-  stroke: #fff;
-  stroke-width: 3;
-  stroke-linejoin: round;
+.sany-brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
 }
-
-.sany-brand-mark svg path { fill: #fff; stroke: #fff; }
-.sany-brand-mark strong { font-size: 29px; letter-spacing: 1px; }
 
 .sany-brand-divider {
   width: 2px;
   height: 78px;
+  flex-shrink: 0;
   background: rgba(255,255,255,.7);
 }
 
-.sany-brand-copy { position: relative; z-index: 1; }
-.sany-brand-copy h1 { margin: 0; font-size: clamp(20px, 3.3vw, 30px); line-height: 1.15; }
-.sany-brand-copy p { margin: 8px 0 0; font-size: clamp(11px, 1.7vw, 15px); letter-spacing: .3px; }
+.sany-brand-copy {
+  position: relative;
+  z-index: 1;
+}
+
+.sany-brand-copy h1 {
+  margin: 0;
+  font-size: clamp(20px, 3.3vw, 30px);
+  line-height: 1.15;
+}
+
+.sany-brand-copy p {
+  margin: 8px 0 0;
+  font-size: clamp(11px, 1.7vw, 15px);
+  letter-spacing: .3px;
+}
+
+/* ===== DASHBOARD ===== */
 
 .container {
   max-width: 850px;
@@ -246,9 +266,23 @@ body {
   pointer-events: none;
 }
 
-.welcome { margin-bottom: 28px; }
-.welcome h2 { font-size: 30px; margin: 0 0 12px; }
-.welcome p { font-size: 17px; line-height: 1.45; color: #555; margin: 0; }
+.welcome {
+  margin-bottom: 28px;
+}
+
+.welcome h2 {
+  font-size: 30px;
+  margin: 0 0 12px;
+}
+
+.welcome p {
+  font-size: 17px;
+  line-height: 1.45;
+  color: #555;
+  margin: 0;
+}
+
+/* ===== MENU CARDS ===== */
 
 .menu.sany-menu {
   display: grid;
@@ -268,7 +302,9 @@ body {
   border-radius: 20px;
   box-shadow: 0 5px 16px rgba(0,0,0,.07);
   cursor: pointer;
-  transition: transform 240ms var(--sany-ease), box-shadow 240ms var(--sany-ease);
+  transition:
+    transform 240ms var(--sany-ease),
+    box-shadow 240ms var(--sany-ease);
 }
 
 .sany-menu-icon {
@@ -305,17 +341,41 @@ body {
   border-left: 1px solid #bfc0c3;
 }
 
-.sany-menu-copy h3 { margin: 0 0 9px; font-size: 19px; line-height: 1.25; }
-.sany-menu-copy p { margin: 0; color: #555; font-size: 15px; line-height: 1.35; }
-.sany-menu-arrow { color: var(--sany-red); font-size: 36px; line-height: 1; font-weight: 300; }
+.sany-menu-copy h3 {
+  margin: 0 0 9px;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.sany-menu-copy p {
+  margin: 0;
+  color: #555;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.sany-menu-arrow {
+  color: var(--sany-red);
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 300;
+}
 
 .menu .item.sany-menu-item:hover {
   transform: translateY(-3px);
   box-shadow: 0 10px 24px rgba(0,0,0,.11);
 }
 
-.menu .item.sany-menu-item:active { transform: scale(.99); }
-.menu .item.sany-menu-item:focus-visible { outline: 3px solid rgba(215,25,32,.25); outline-offset: 3px; }
+.menu .item.sany-menu-item:active {
+  transform: scale(.99);
+}
+
+.menu .item.sany-menu-item:focus-visible {
+  outline: 3px solid rgba(215,25,32,.25);
+  outline-offset: 3px;
+}
+
+/* ===== FOOTER ===== */
 
 footer.sany-footer {
   text-align: center;
@@ -332,28 +392,104 @@ footer.sany-footer {
   font-size: 14px;
 }
 
-.sany-developer span { color: var(--sany-red); font-weight: 900; font-style: normal; margin-right: 8px; }
-.sany-developer strong { color: var(--sany-red); font-style: normal; }
-
-@media (max-width: 600px) {
-  .sany-brand-header { min-height: 118px; gap: 13px; padding: 17px 16px; }
-  .sany-brand-mark { width: 82px; min-width: 82px; }
-  .sany-brand-mark svg { width: 52px; height: 52px; }
-  .sany-brand-mark strong { font-size: 22px; }
-  .sany-brand-divider { height: 60px; }
-  .container { margin: 18px auto; padding: 16px; }
-  .welcome h2 { font-size: 27px; }
-  .welcome p { font-size: 16px; }
-  .menu .item.sany-menu-item { min-height: 112px; gap: 12px; padding: 14px 12px; border-radius: 17px; }
-  .sany-menu-icon { width: 76px; height: 76px; min-width: 76px; border-radius: 14px; }
-  .sany-menu-icon svg { width: 62px; height: 62px; }
-  .sany-menu-copy { padding-left: 12px; }
-  .sany-menu-copy h3 { font-size: 16px; }
-  .sany-menu-copy p { font-size: 13px; }
-  .sany-menu-arrow { font-size: 28px; }
-  footer.sany-footer { padding-top: 42px; }
+.sany-developer span {
+  color: var(--sany-red);
+  font-weight: 900;
+  font-style: normal;
+  margin-right: 8px;
 }
 
+.sany-developer strong {
+  color: var(--sany-red);
+  font-style: normal;
+}
+
+/* ===== MOBILE RESPONSIVE ===== */
+
+@media (max-width: 600px) {
+  .sany-brand-header {
+    min-height: 118px;
+    gap: 13px;
+    padding: 17px 16px;
+  }
+
+  .sany-brand-mark {
+    width: 82px;
+    min-width: 82px;
+    height: 88px;
+  }
+
+  .sany-brand-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .sany-brand-divider {
+    height: 60px;
+  }
+
+  .container {
+    margin: 18px auto;
+    padding: 16px;
+  }
+
+  .welcome h2 {
+    font-size: 27px;
+  }
+
+  .welcome p {
+    font-size: 16px;
+  }
+
+  .menu .item.sany-menu-item {
+    min-height: 112px;
+    gap: 12px;
+    padding: 14px 12px;
+    border-radius: 17px;
+  }
+
+  .sany-menu-icon {
+    width: 76px;
+    height: 76px;
+    min-width: 76px;
+    border-radius: 14px;
+  }
+
+  .sany-menu-icon svg {
+    width: 62px;
+    height: 62px;
+  }
+
+  .sany-menu-copy {
+    padding-left: 12px;
+  }
+
+  .sany-menu-copy h3 {
+    font-size: 16px;
+  }
+
+  .sany-menu-copy p {
+    font-size: 13px;
+  }
+
+  .sany-menu-arrow {
+    font-size: 28px;
+  }
+
+  footer.sany-footer {
+    padding-top: 42px;
+  }
+}
+
+/* ===== ACCESSIBILITY ===== */
+
 @media (prefers-reduced-motion: reduce) {
-  .menu .item.sany-menu-item { transition: none !important; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }

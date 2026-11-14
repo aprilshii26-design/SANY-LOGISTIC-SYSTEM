@@ -1,7 +1,6 @@
-
 /**
  * SANY LOGISTIC SYSTEM
- * FRONTEND v3.0.0
+ * FRONTEND v3.1.0
  * Batch Processing + IndexedDB
  * Self Pickup tetap menggunakan transaksi lama
  */
@@ -354,6 +353,25 @@ async function getOrCreateBatch(menu) {
   const saved = await getLocalBatch(menu);
 
   if (saved) {
+
+    // Kompatibilitas batch lama yang tersimpan
+    // sebelum field logisticName tersedia.
+    if (typeof saved.logisticName !== "string") {
+      saved.logisticName = "";
+    }
+
+    if (!Array.isArray(saved.items)) {
+      saved.items = [];
+    }
+
+    // Pemulihan batch yang tertinggal saat request terputus.
+    if (saved.status === "EXPORTING") {
+      saved.status = "DRAFT";
+      saved.recoveryRequired = true;
+      saved.updatedAt = new Date().toISOString();
+      await saveLocalBatch(saved);
+    }
+
     activeBatch = saved;
     return saved;
   }
@@ -365,6 +383,7 @@ async function getOrCreateBatch(menu) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     status: "DRAFT",
+    logisticName: "",
     items: []
   };
 
@@ -586,7 +605,6 @@ auth.onAuthStateChanged(user => {
 // ==================================================
 // AKHIR BAGIAN 1 DARI 6
 // ==================================================
-
 // ==================================================
 // BAGIAN 2 DARI 6
 // PEMBUKAAN MENU DAN INPUT BATCH
@@ -753,6 +771,32 @@ function renderBatchScreen() {
 
         <strong>${escapeHTML(activeBatch.batchId)}</strong>
 
+        ${
+          currentMenu === "trucking"
+            ? `
+              <div style="margin-top:15px">
+                <label for="batchLogisticName">
+                  Logistic Name *
+                </label>
+
+                <input
+                  type="text"
+                  id="batchLogisticName"
+                  value="${escapeHTML(activeBatch.logisticName || "")}"
+                  placeholder="Nama logistic / pengangkut"
+                  autocomplete="off"
+                  style="
+                    width:100%;
+                    box-sizing:border-box;
+                    padding:12px;
+                    margin-top:7px;
+                  "
+                >
+              </div>
+            `
+            : ""
+        }
+
         <div
           style="
             display:flex;
@@ -855,6 +899,25 @@ function renderBatchScreen() {
           margin:8px 0;
         "
       >
+
+      <label for="batchRemarks">
+        Remarks
+      </label>
+
+      <textarea
+        id="batchRemarks"
+        placeholder="Catatan tambahan untuk DO ini (opsional)"
+        maxlength="1000"
+        rows="2"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          padding:12px;
+          margin:8px 0;
+          font-family:inherit;
+          resize:vertical;
+        "
+      ></textarea>
 
       <div
         style="
@@ -1156,6 +1219,37 @@ async function addBatchDO(method = "MANUAL", value = null) {
     return;
   }
 
+  const remarksInput = document.getElementById("batchRemarks");
+  const remarks = remarksInput ? remarksInput.value.trim() : "";
+
+  if (remarks.length > 1000) {
+    showToast("Remarks maksimal 1000 karakter.", "error");
+    return;
+  }
+
+  let logisticName = "";
+
+  if (activeBatch.menu === "trucking") {
+
+    const logisticInput = document.getElementById(
+      "batchLogisticName"
+    );
+
+    logisticName = logisticInput
+      ? logisticInput.value.trim()
+      : (activeBatch.logisticName || "");
+
+    if (!logisticName) {
+      showToast("Logistic Name wajib diisi.", "error");
+
+      if (logisticInput) logisticInput.focus();
+
+      return;
+    }
+
+    activeBatch.logisticName = logisticName;
+  }
+
   batchSaving = true;
 
   try {
@@ -1167,6 +1261,7 @@ async function addBatchDO(method = "MANUAL", value = null) {
       doNumber: doNumber,
       normalizedDO: normalized,
       inputMethod: method === "SCAN" ? "SCAN" : "MANUAL",
+      remarks: remarks,
       createdAt: new Date().toISOString(),
       status: "PENDING"
     };
@@ -1180,6 +1275,10 @@ async function addBatchDO(method = "MANUAL", value = null) {
     if (input) {
       input.value = "";
       input.focus();
+    }
+
+    if (remarksInput) {
+      remarksInput.value = "";
     }
 
     renderBatchList();
@@ -1345,7 +1444,8 @@ function renderBatchList() {
     metadata.textContent =
       item.inputMethod +
       " | " +
-      new Date(item.createdAt).toLocaleTimeString("id-ID");
+      new Date(item.createdAt).toLocaleTimeString("id-ID") +
+      (item.remarks ? " | Remarks: " + item.remarks : "");
 
     const status = document.createElement("div");
 
@@ -1490,8 +1590,6 @@ async function removeBatchDO(itemId) {
 
 // ==================================================
 // AKHIR BAGIAN 2 DARI 6
-// ==================================================
-
 // ==================================================
 // BAGIAN 3 DARI 6
 // REVIEW DAN VALIDASI BATCH
@@ -1799,7 +1897,8 @@ function renderReviewList(search = "") {
 
     metadata.textContent =
       "Metode: " + item.inputMethod +
-      " | Status: " + (item.status || "PENDING");
+      " | Status: " + (item.status || "PENDING") +
+      (item.remarks ? " | Remarks: " + item.remarks : "");
 
     const sequence = document.createElement("div");
 
@@ -1927,6 +2026,11 @@ function validateBatchStructure(batch) {
     throw new Error("Batch belum memiliki DO.");
   }
 
+  if (batch.menu === "trucking" &&
+      !String(batch.logisticName || "").trim()) {
+    throw new Error("Logistic Name wajib diisi untuk batch Trucking.");
+  }
+
   const seen = new Set();
 
   for (const item of batch.items) {
@@ -1958,6 +2062,10 @@ function validateBatchStructure(batch) {
         "Metode input DO " + doNumber + " tidak valid."
       );
     }
+
+    if (String(item.remarks || "").length > 1000) {
+      throw new Error("Remarks DO " + doNumber + " melebihi 1000 karakter.");
+    }
   }
 
   return true;
@@ -1984,6 +2092,9 @@ async function prepareBatchForExport() {
     batchId: activeBatch.batchId,
     menu: activeBatch.menu,
     picEmail: activeBatch.picEmail,
+    logisticName: activeBatch.menu === "trucking"
+      ? String(activeBatch.logisticName || "").trim()
+      : "",
     createdAt: activeBatch.createdAt,
     updatedAt: activeBatch.updatedAt,
     items: activeBatch.items.map(item => ({
@@ -1991,6 +2102,7 @@ async function prepareBatchForExport() {
       sequence: item.sequence,
       doNumber: item.doNumber,
       inputMethod: item.inputMethod,
+      remarks: item.remarks || "",
       createdAt: item.createdAt,
       status: item.status
     }))
@@ -2000,9 +2112,6 @@ async function prepareBatchForExport() {
 
 // ==================================================
 // AKHIR BAGIAN 3 DARI 6
-// ==================================================
-
-// ==================================================
 // BAGIAN 4 DARI 6
 // MESIN EKSPOR DAN PEMULIHAN BATCH
 // ==================================================
@@ -2151,12 +2260,14 @@ async function sendBatchToServer(batchPayload) {
     batchId: batchPayload.batchId,
     menu: batchPayload.menu,
     picEmail: batchPayload.picEmail,
+    logisticName: batchPayload.logisticName || "",
     createdAt: batchPayload.createdAt,
     items: batchPayload.items.map(item => ({
       itemId: item.itemId,
       sequence: item.sequence,
       doNumber: item.doNumber,
       inputMethod: item.inputMethod,
+      remarks: item.remarks || "",
       createdAt: item.createdAt
     }))
   };
@@ -2214,6 +2325,13 @@ function validateBatchServerResponse(result) {
       );
     }
 
+    if (!["EXPORTED", "REJECTED", "NEEDS_REVIEW", "PREPARED"].includes(item.status)) {
+      throw new Error(
+        "Status hasil server tidak dikenal untuk DO " +
+        (item.doNumber || item.itemId) + "."
+      );
+    }
+
     if (returnedIds.has(item.itemId)) {
       throw new Error(
         "Respons server memiliki item duplikat."
@@ -2261,13 +2379,31 @@ async function synchronizeBatchResult(result) {
     if (serverItem.exportedAt) {
       item.exportedAt = serverItem.exportedAt;
     }
+
+    if (serverItem.recovered === true) {
+      item.recovered = true;
+    }
+
+    if (serverItem.idempotentReplay === true) {
+      item.idempotentReplay = true;
+    }
   });
 
+  const statuses = activeBatch.items.map(item => item.status);
+
   activeBatch.serverSummary = {
-    total: result.total,
-    success: result.successCount,
-    duplicate: result.duplicateCount,
-    failed: result.failedCount
+    total: Number.isFinite(Number(result.total))
+      ? Number(result.total)
+      : activeBatch.items.length,
+    success: Number.isFinite(Number(result.successCount))
+      ? Number(result.successCount)
+      : statuses.filter(status => status === "EXPORTED").length,
+    duplicate: Number.isFinite(Number(result.duplicateCount))
+      ? Number(result.duplicateCount)
+      : 0,
+    failed: Number.isFinite(Number(result.failedCount))
+      ? Number(result.failedCount)
+      : statuses.filter(status => ["REJECTED", "NEEDS_REVIEW"].includes(status)).length
   };
 
   activeBatch.updatedAt = new Date().toISOString();
@@ -2618,9 +2754,6 @@ async function createNextBatch() {
 
 // ==================================================
 // AKHIR BAGIAN 4 DARI 6
-// ==================================================
-
-// ==================================================
 // BAGIAN 5 DARI 6
 // SELF PICKUP, QR SCANNER, DAN NAVIGASI
 // ==================================================
@@ -3484,33 +3617,11 @@ async function goHome() {
 // 58. RESET FORM SELF PICKUP
 // ==================================================
 
-async function resetScanForm(id) {
-
-  await stopScanner();
-
-  clearSelectedAttachments();
-
-  currentStep = "scan";
-
-  inputMethod = "MANUAL";
-
-  qrCameraId = null;
-
-  renderScanScreen();
-
-  await startScanner();
-
-  const input = document.getElementById("doNumber");
-
-  if (input) input.focus();
-}
+// Implementasi final resetScanForm berada di Bagian 6.
 
 
 // ==================================================
 // AKHIR BAGIAN 5 DARI 6
-// ==================================================
-
-// ==================================================
 // BAGIAN 6 DARI 6
 // FINALISASI DAN TRANSAKSI SELF PICKUP
 // ==================================================
@@ -4097,7 +4208,7 @@ async function initializeBatchStorage() {
 // ==================================================
 
 console.log(
-  "SANY LOGISTIC SYSTEM FRONTEND v3.0.0 LOADED"
+  "SANY LOGISTIC SYSTEM FRONTEND v3.1.0 LOADED"
 );
 
 console.log(
@@ -4115,4 +4226,3 @@ initializeBatchStorage();
 
 // ==================================================
 // AKHIR BAGIAN 6 DARI 6
-// ==================================================

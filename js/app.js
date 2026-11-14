@@ -2328,9 +2328,7 @@ function validateBatchServerResponse(result) {
   }
 
   if (!Array.isArray(result.results)) {
-    throw new Error(
-      "Server tidak memberikan rincian hasil DO."
-    );
+    throw new Error("Server tidak memberikan rincian hasil DO.");
   }
 
   const expectedIds = new Set(
@@ -2342,12 +2340,16 @@ function validateBatchServerResponse(result) {
   result.results.forEach(item => {
 
     if (!item.itemId || !expectedIds.has(item.itemId)) {
-      throw new Error(
-        "Respons server berisi item yang tidak dikenal."
-      );
+      throw new Error("Respons server berisi item yang tidak dikenal.");
     }
 
-    if (!["EXPORTED", "REJECTED", "NEEDS_REVIEW", "PREPARED"].includes(item.status)) {
+    if (![
+      "EXPORTED",
+      "DUPLICATE",
+      "REJECTED",
+      "NEEDS_REVIEW",
+      "PREPARED"
+    ].includes(item.status)) {
       throw new Error(
         "Status hasil server tidak dikenal untuk DO " +
         (item.doNumber || item.itemId) + "."
@@ -2355,23 +2357,18 @@ function validateBatchServerResponse(result) {
     }
 
     if (returnedIds.has(item.itemId)) {
-      throw new Error(
-        "Respons server memiliki item duplikat."
-      );
+      throw new Error("Respons server memiliki item duplikat.");
     }
 
     returnedIds.add(item.itemId);
   });
 
   if (returnedIds.size !== expectedIds.size) {
-    throw new Error(
-      "Respons server belum mencakup seluruh DO batch."
-    );
+    throw new Error("Respons server belum mencakup seluruh DO batch.");
   }
 
   return true;
 }
-
 
 // ==================================================
 // 40. SINKRONISASI HASIL SERVER KE LOKAL

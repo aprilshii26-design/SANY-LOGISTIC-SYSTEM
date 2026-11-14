@@ -1166,14 +1166,12 @@ async function addBatchDO(method = "MANUAL", value = null) {
   }
 
   if (activeBatch.status !== "DRAFT") {
-    showToast(
-      "Batch sedang diproses dan tidak dapat diubah.",
-      "error"
-    );
+    showToast("Batch sedang diproses dan tidak dapat diubah.", "error");
     return;
   }
 
   const input = document.getElementById("doNumber");
+  const remarksInput = document.getElementById("batchRemarks");
 
   const rawValue = value !== null
     ? value
@@ -1183,44 +1181,34 @@ async function addBatchDO(method = "MANUAL", value = null) {
 
   if (!doNumber) {
     showToast("DO Number wajib diisi.", "error");
-
     if (input) input.focus();
-
     return;
   }
 
   if (doNumber.length > 80) {
-    showToast(
-      "DO Number maksimal 80 karakter.",
-      "error"
-    );
+    showToast("DO Number maksimal 80 karakter.", "error");
     return;
   }
 
   const normalized = normalizeDONumber(doNumber);
 
-  // Cek duplikat dalam batch aktif.
   const duplicate = activeBatch.items.some(item =>
     normalizeDONumber(item.doNumber) === normalized
   );
 
   if (duplicate) {
-
-    showToast(
-      "DO " + doNumber + " sudah ada dalam batch ini.",
-      "error"
-    );
-
+    showToast("DO " + doNumber + " sudah ada dalam batch ini.", "error");
     if (input && value === null) {
       input.select();
       input.focus();
     }
-
     return;
   }
 
-  const remarksInput = document.getElementById("batchRemarks");
-  const remarks = remarksInput ? remarksInput.value.trim() : "";
+  // Ambil Remarks langsung dari textarea.
+  const remarks = remarksInput
+    ? String(remarksInput.value || "").trim()
+    : "";
 
   if (remarks.length > 1000) {
     showToast("Remarks maksimal 1000 karakter.", "error");
@@ -1231,9 +1219,7 @@ async function addBatchDO(method = "MANUAL", value = null) {
 
   if (activeBatch.menu === "trucking") {
 
-    const logisticInput = document.getElementById(
-      "batchLogisticName"
-    );
+    const logisticInput = document.getElementById("batchLogisticName");
 
     logisticName = logisticInput
       ? logisticInput.value.trim()
@@ -1241,9 +1227,7 @@ async function addBatchDO(method = "MANUAL", value = null) {
 
     if (!logisticName) {
       showToast("Logistic Name wajib diisi.", "error");
-
       if (logisticInput) logisticInput.focus();
-
       return;
     }
 
@@ -1266,6 +1250,13 @@ async function addBatchDO(method = "MANUAL", value = null) {
       status: "PENDING"
     };
 
+    // Debug: pastikan Remarks masuk ke item.
+    console.log("BATCH REMARKS CHECK:", {
+      doNumber: item.doNumber,
+      remarks: item.remarks,
+      remarksLength: item.remarks.length
+    });
+
     activeBatch.items.push(item);
 
     activeBatch.updatedAt = new Date().toISOString();
@@ -1282,11 +1273,12 @@ async function addBatchDO(method = "MANUAL", value = null) {
     }
 
     renderBatchList();
-
     updateBatchCounters();
 
     showToast(
-      "DO berhasil ditambahkan: " + doNumber,
+      remarks
+        ? "DO dan Remarks berhasil ditambahkan: " + doNumber
+        : "DO berhasil ditambahkan: " + doNumber,
       "success"
     );
 
@@ -1304,7 +1296,6 @@ async function addBatchDO(method = "MANUAL", value = null) {
     batchSaving = false;
   }
 }
-
 
 // ==================================================
 // 22. HASIL SCAN QR / PDA

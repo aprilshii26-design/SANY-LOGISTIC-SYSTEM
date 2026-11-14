@@ -493,3 +493,114 @@ footer.sany-footer {
     transition-duration: .01ms !important;
   }
 }
+
+
+/* ===== ANIMATION PACKAGE 1–5: POLISHED INTERACTIONS ===== */
+
+/* 1. Page/menu transitions: existing content and form structure stay intact. */
+main.container > * {
+  animation: sanyFadeUp 420ms var(--sany-ease) both;
+}
+
+main.container > .form-scan,
+main.container > section {
+  will-change: opacity, transform;
+}
+
+/* 2. DO cards enter with a subtle stagger. */
+.sany-do-card {
+  animation: sanyCardIn 360ms var(--sany-ease) both;
+  animation-delay: calc(var(--sany-card-index, 0) * 35ms);
+  transition: box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.sany-do-card:hover {
+  border-color: rgba(215, 25, 32, .35) !important;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, .07);
+}
+
+/* 3. Real in-flight save/export states only; no fake progress is added. */
+button.sany-is-loading {
+  position: relative;
+  padding-right: 42px !important;
+  cursor: wait;
+  opacity: .88;
+}
+
+button.sany-is-loading::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  margin-top: -8px;
+  border: 2px solid rgba(255,255,255,.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: sanySpin 700ms linear infinite;
+}
+
+/* 4. Success confirmation animates only on the confirmed result screen. */
+.sany-success-mark {
+  animation: sanySuccessPop 520ms cubic-bezier(.18,.9,.25,1.25) both;
+}
+
+@keyframes sanySuccessPop {
+  0% { opacity: 0; transform: scale(.55); }
+  70% { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* 5. Toast enters and exits smoothly; JS controls its lifecycle. */
+#sanyToast.sany-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  z-index: 99999;
+  max-width: min(90%, 520px);
+  padding: 14px 22px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: 0 6px 22px rgba(0,0,0,.2);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, 14px) scale(.96);
+  transition:
+    opacity 220ms ease,
+    transform 220ms var(--sany-ease),
+    visibility 220ms;
+}
+
+#sanyToast.sany-toast-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0) scale(1);
+}
+
+#sanyToast.sany-toast-leave {
+  opacity: 0;
+  transform: translate(-50%, 10px) scale(.98);
+}
+
+#sanyToast.sany-toast-hidden {
+  visibility: hidden;
+}
+
+#sanyToast.sany-toast-success { background: #218838; }
+#sanyToast.sany-toast-error { background: #c62828; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sany-do-card,
+  .sany-success-mark,
+  main.container > *,
+  #sanyToast.sany-toast {
+    animation: none !important;
+    transition: none !important;
+  }
+}

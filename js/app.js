@@ -2734,9 +2734,16 @@ function showBatchExportResult() {
 
 async function createNextBatch() {
 
-  if (!activeBatch || activeBatch.status !== "COMPLETED") {
+  if (!activeBatch) {
+    showToast("Batch sebelumnya tidak ditemukan.", "error");
+    return;
+  }
+
+  const allowedStatuses = ["COMPLETED", "REJECTED"];
+
+  if (!allowedStatuses.includes(activeBatch.status)) {
     showToast(
-      "Batch sebelumnya belum selesai.",
+      "Batch belum memiliki status akhir yang terkonfirmasi.",
       "error"
     );
     return;
@@ -2745,6 +2752,15 @@ async function createNextBatch() {
   const menu = activeBatch.menu;
 
   try {
+
+    const confirmed = window.confirm(
+      "Buat batch baru?\n\n" +
+      "Batch sebelumnya: " + activeBatch.batchId + "\n" +
+      "Status: " + activeBatch.status + "\n\n" +
+      "Data batch lama tidak akan dibawa ke batch baru."
+    );
+
+    if (!confirmed) return;
 
     await deleteLocalBatch(menu);
 
@@ -2768,13 +2784,14 @@ async function createNextBatch() {
 
   } catch (error) {
 
+    console.error("Create next batch:", error);
+
     showToast(
       "Gagal membuat batch baru: " + error.message,
       "error"
     );
   }
 }
-
 
 // ==================================================
 // AKHIR BAGIAN 4 DARI 6

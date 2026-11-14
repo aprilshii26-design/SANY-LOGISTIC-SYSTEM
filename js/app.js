@@ -428,47 +428,39 @@ async function getOrCreateBatch(menu) {
 // ==================================================
 
 function showToast(message, type = "success") {
-
   let toast = document.getElementById("sanyToast");
 
   if (!toast) {
-
     toast = document.createElement("div");
-
     toast.id = "sanyToast";
-
-    toast.style.cssText = `
-      position:fixed;
-      left:50%;
-      bottom:30px;
-      transform:translateX(-50%);
-      z-index:99999;
-      padding:14px 22px;
-      border-radius:10px;
-      color:white;
-      font-weight:bold;
-      font-size:14px;
-      max-width:90%;
-      text-align:center;
-      box-shadow:0 4px 15px #0003;
-    `;
-
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
     document.body.appendChild(toast);
   }
 
-  toast.style.background =
-    type === "success" ? "#218838" : "#C62828";
+  clearTimeout(toast.timer);
+  clearTimeout(toast.hideTimer);
+
+  toast.className = "sany-toast sany-toast-" +
+    (type === "success" ? "success" : "error");
 
   toast.textContent = message;
-  toast.style.display = "block";
+  toast.classList.remove("sany-toast-hidden", "sany-toast-leave");
 
-  clearTimeout(toast.timer);
+  // Reflow allows the enter animation to replay for consecutive messages.
+  void toast.offsetWidth;
+  toast.classList.add("sany-toast-visible");
 
   toast.timer = setTimeout(() => {
-    toast.style.display = "none";
+    toast.classList.remove("sany-toast-visible");
+    toast.classList.add("sany-toast-leave");
+
+    toast.hideTimer = setTimeout(() => {
+      toast.classList.remove("sany-toast-leave");
+      toast.classList.add("sany-toast-hidden");
+    }, 260);
   }, 3000);
 }
-
 
 // ==================================================
 // 11. LOGIN
@@ -1431,6 +1423,8 @@ function renderBatchList() {
   items.forEach((item, index) => {
 
     const card = document.createElement("div");
+    card.classList.add("sany-do-card");
+    card.style.setProperty("--sany-card-index", Math.min(index, 10));
 
     card.style.cssText = `
       display:flex;
@@ -2195,6 +2189,7 @@ function renderExportProgress(message, percentage = 0) {
 
   if (button) {
     button.disabled = true;
+    button.classList.add("sany-is-loading");
     button.textContent = "SEDANG MENGEKSPOR...";
   }
 }
@@ -2212,6 +2207,7 @@ function restoreExportButton() {
 
   if (button) {
     button.disabled = false;
+    button.classList.remove("sany-is-loading");
     button.textContent = "EKSPOR SEMUA";
   }
 }
@@ -2647,7 +2643,7 @@ function showBatchExportResult() {
       text-align:center;
     ">
 
-      <div style="
+      <div class="sany-success-mark" style="
         width:70px;
         height:70px;
         margin:auto;
@@ -4038,6 +4034,7 @@ async function submitScan(id) {
   try {
 
     button.disabled = true;
+    button.classList.add("sany-is-loading");
 
     button.textContent = "MENYIAPKAN...";
 
@@ -4180,6 +4177,7 @@ async function submitScan(id) {
     if (button) {
 
       button.disabled = false;
+      button.classList.remove("sany-is-loading");
 
       button.textContent = "SIMPAN TRANSAKSI";
     }

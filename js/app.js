@@ -2544,12 +2544,17 @@ async function exportBatchToServer() {
 
     } else {
 
-      activeBatch.status = "DRAFT";
+const rejected =
+  Number(result.duplicateCount || 0) > 0 ||
+  Number(result.failedCount || 0) > 0;
 
-      activeBatch.updatedAt = new Date().toISOString();
+activeBatch.status = rejected
+  ? "REJECTED"
+  : "DRAFT";
 
-      await saveLocalBatch(activeBatch);
+activeBatch.updatedAt = new Date().toISOString();
 
+await saveLocalBatch(activeBatch);
       renderExportProgress(
         "Sebagian DO belum berhasil diekspor.",
         100

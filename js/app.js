@@ -354,8 +354,6 @@ async function getOrCreateBatch(menu) {
 
   if (saved) {
 
-    // Kompatibilitas batch lama yang tersimpan
-    // sebelum field logisticName tersedia.
     if (typeof saved.logisticName !== "string") {
       saved.logisticName = "";
     }
@@ -364,15 +362,49 @@ async function getOrCreateBatch(menu) {
       saved.items = [];
     }
 
-    // Pemulihan batch yang tertinggal saat request terputus.
+    // Batch selesai atau ditolak tidak boleh digunakan kembali.
+    if (
+      saved.status === "COMPLETED" ||
+      saved.status === "REJECTED"
+    ) {
+
+      console.log(
+        "Batch sebelumnya sudah selesai:",
+        saved.batchId
+      );
+
+      const newBatch = {
+        batchId: createBatchId(),
+        menu: menu,
+        picEmail: currentUser.email,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: "DRAFT",
+        logisticName: "",
+        items: []
+      };
+
+      await saveLocalBatch(newBatch);
+
+      activeBatch = newBatch;
+
+      return newBatch;
+    }
+
+    // Batch yang terputus saat ekspor perlu pemeriksaan,
+    // bukan otomatis dianggap aman untuk dikirim ulang.
     if (saved.status === "EXPORTING") {
-      saved.status = "DRAFT";
+
       saved.recoveryRequired = true;
+
       saved.updatedAt = new Date().toISOString();
+
       await saveLocalBatch(saved);
+
     }
 
     activeBatch = saved;
+
     return saved;
   }
 
@@ -393,7 +425,6 @@ async function getOrCreateBatch(menu) {
 
   return batch;
 }
-
 
 // ==================================================
 // 10. NOTIFIKASI

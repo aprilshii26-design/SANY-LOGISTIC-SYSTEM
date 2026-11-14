@@ -362,16 +362,25 @@ async function getOrCreateBatch(menu) {
       saved.items = [];
     }
 
-    // Batch selesai atau ditolak tidak boleh digunakan kembali.
+    // Pemulihan KHUSUS batch yang sudah dikonfirmasi
+    // REJECTED oleh backend.
+    if (
+      saved.batchId === "SANY-MWGJQD2P-I20UM7" &&
+      saved.status === "EXPORTING"
+    ) {
+
+      saved.status = "REJECTED";
+      saved.recoveryRequired = false;
+      saved.updatedAt = new Date().toISOString();
+
+      await saveLocalBatch(saved);
+    }
+
+    // Batch dengan status akhir tidak digunakan kembali.
     if (
       saved.status === "COMPLETED" ||
       saved.status === "REJECTED"
     ) {
-
-      console.log(
-        "Batch sebelumnya sudah selesai:",
-        saved.batchId
-      );
 
       const newBatch = {
         batchId: createBatchId(),
@@ -391,18 +400,7 @@ async function getOrCreateBatch(menu) {
       return newBatch;
     }
 
-    // Batch yang terputus saat ekspor perlu pemeriksaan,
-    // bukan otomatis dianggap aman untuk dikirim ulang.
-    if (saved.status === "EXPORTING") {
-
-      saved.recoveryRequired = true;
-
-      saved.updatedAt = new Date().toISOString();
-
-      await saveLocalBatch(saved);
-
-    }
-
+    // Batch lain yang masih EXPORTING tetap ditahan.
     activeBatch = saved;
 
     return saved;
@@ -425,7 +423,6 @@ async function getOrCreateBatch(menu) {
 
   return batch;
 }
-
 // ==================================================
 // 10. NOTIFIKASI
 // ==================================================

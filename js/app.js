@@ -667,8 +667,6 @@ async function openMenu(id) {
 
       renderBatchScreen();
 
-      await startScanner();
-
       const input = document.getElementById("doNumber");
 
       if (input) input.focus();
@@ -891,19 +889,33 @@ function renderBatchScreen() {
         </div>
       </div>
 
-      <div
-        id="reader"
-        style="
-          width:100%;
-          max-width:350px;
-          margin:15px auto;
-          min-height:200px;
-        "
-      ></div>
+      <div style="text-align:center;margin:15px 0">
+        <button
+          type="button"
+          id="batchCameraButton"
+          style="
+            width:100%;
+            max-width:350px;
+            padding:12px;
+          "
+        >
+          AKTIFKAN KAMERA HP
+        </button>
+
+        <div
+          id="reader"
+          style="
+            width:100%;
+            max-width:350px;
+            margin:15px auto;
+            min-height:0;
+          "
+        ></div>
+      </div>
 
       <p style="text-align:center">
-        Arahkan kamera ke QR Code DO atau gunakan
-        tombol scanner fisik PDA.
+        Gunakan tombol scanner fisik PDA untuk membaca barcode,
+        atau aktifkan kamera HP jika diperlukan.
       </p>
 
       <label for="doNumber">
@@ -1088,6 +1100,10 @@ function bindBatchScreenEvents() {
     "batchScanModeButton"
   );
 
+  const cameraButton = document.getElementById(
+    "batchCameraButton"
+  );
+
   const manualButton = document.getElementById(
     "batchManualModeButton"
   );
@@ -1125,16 +1141,24 @@ function bindBatchScreenEvents() {
     addBatchDO(inputMethod);
   };
 
-  scanButton.onclick = async () => {
+  scanButton.onclick = () => {
 
     inputMethod = "SCAN";
 
     updateBatchInputStatus();
 
     input.focus();
-
-    await startScanner();
   };
+
+  if (cameraButton) {
+
+    cameraButton.onclick = async () => {
+
+      await startScanner();
+
+    };
+
+  }
 
   manualButton.onclick = async () => {
 
@@ -1960,8 +1984,6 @@ async function returnToBatchScreen() {
 
   renderBatchScreen();
 
-  await startScanner();
-
   const input = document.getElementById("doNumber");
 
   if (input) input.focus();
@@ -2771,8 +2793,6 @@ async function createNextBatch() {
     inputMethod = "MANUAL";
 
     renderBatchScreen();
-
-    await startScanner();
 
     const input = document.getElementById("doNumber");
 
@@ -3708,16 +3728,25 @@ function renderScanScreen() {
         SCAN MODE AKTIF
       </div>
 
-      <div
-        id="reader"
-        style="
-          width:100%;
-          max-width:350px;
-          margin:15px auto;
-          min-height:200px;
-        "
-      ></div>
+<div style="text-align:center;margin:15px 0">
+  <button
+    type="button"
+    id="batchCameraButton"
+    style="padding:12px;width:100%;max-width:350px"
+  >
+    AKTIFKAN KAMERA HP
+  </button>
 
+  <div
+    id="reader"
+    style="
+      width:100%;
+      max-width:350px;
+      margin:15px auto;
+      min-height:0;
+    "
+  ></div>
+</div>
       <p style="text-align:center">
         Arahkan kamera ke QR Code DO atau gunakan
         tombol scanner PDA.

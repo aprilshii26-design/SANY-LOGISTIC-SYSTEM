@@ -1,6 +1,6 @@
 /**
  * SANY LOGISTIC SYSTEM
- * FRONTEND v3.1.2
+ * FRONTEND v3.2.0
  * Batch Processing + IndexedDB
  * Self Pickup tetap menggunakan transaksi lama
  */
@@ -12,19 +12,26 @@
 const APPS_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzTJ49IkTUY5jvLxD2tvGrZKEAKjDfVNlAEi8xbeMptxy5UxLHFPqQDs8vhi2MdDjDQ/exec";
 
+// Menu v3.2.0. ID empat batch lama dipertahankan agar data IndexedDB
+// existing tetap terbaca. Dua menu Arsip memakai key baru yang terpisah.
 const menus = [
-  { id: "regular", title: "Administrasi Regular" },
-  { id: "trucking", title: "Administrasi Trucking" },
+  { id: "regular", title: "Administrasi DO Regular" },
+  { id: "trucking", title: "Administrasi DO Trucking" },
   { id: "selfpickup", title: "Administrasi Self Pickup" },
-  { id: "return-regular", title: "Return DO Regular" },
-  { id: "return-trucking", title: "Return DO Trucking" }
+  { id: "return-regular", title: "Return DO Regular Handover" },
+  { id: "return-trucking", title: "Return DO Trucking Handover" },
+  { id: "return-regular-arsip", title: "Return DO Regular Arsip" },
+  { id: "return-trucking-arsip", title: "Return DO Trucking Arsip" },
+  { id: "do-balik-dokumentasi", title: "Dokumentasi DO Balik" }
 ];
 
 const BATCH_MENUS = [
   "regular",
   "trucking",
   "return-regular",
-  "return-trucking"
+  "return-trucking",
+  "return-regular-arsip",
+  "return-trucking-arsip"
 ];
 
 const DB_NAME = "SANY_LOGISTIC_BATCH";
@@ -362,8 +369,8 @@ async function getOrCreateBatch(menu) {
       saved.items = [];
     }
 
-    // Pemulihan KHUSUS batch yang sudah dikonfirmasi
-    // REJECTED oleh backend.
+    // Penanganan satu kali untuk batch historis yang telah dikonfirmasi
+    // REJECTED oleh backend. Tidak memengaruhi batch EXPORTING lainnya.
     if (
       saved.batchId === "SANY-MWGJQD2P-I20UM7" &&
       saved.status === "EXPORTING"
@@ -1273,12 +1280,7 @@ async function addBatchDO(method = "MANUAL", value = null) {
       ? logisticInput.value.trim()
       : (activeBatch.logisticName || "");
 
-    if (!logisticName) {
-      showToast("Logistic Name wajib diisi.", "error");
-      if (logisticInput) logisticInput.focus();
-      return;
-    }
-
+    // Logistic Name bersifat opsional sesuai kontrak backend v3.2.0.
     activeBatch.logisticName = logisticName;
   }
 
@@ -1374,7 +1376,7 @@ async function handleDOScanned(value) {
     return;
   }
 
-  // Self Pickup menggunakan alur transaksi lama.
+  // Self Pickup dan DO Balik menggunakan alur transaksi satuan.
   if (currentStep !== "scan") return;
 
   const oldInput = document.getElementById("doNumber");
@@ -1393,7 +1395,7 @@ async function handleDOScanned(value) {
     method.textContent = "Metode input: SCAN";
   }
 
-  if (currentMenu === "selfpickup") {
+  if (["selfpickup", "do-balik-dokumentasi"].includes(currentMenu)) {
 
     openSelfPickupDocumentation();
 
@@ -2063,11 +2065,6 @@ function validateBatchStructure(batch) {
 
   if (!Array.isArray(batch.items) || batch.items.length === 0) {
     throw new Error("Batch belum memiliki DO.");
-  }
-
-  if (batch.menu === "trucking" &&
-      !String(batch.logisticName || "").trim()) {
-    throw new Error("Logistic Name wajib diisi untuk batch Trucking.");
   }
 
   const seen = new Set();
@@ -2848,7 +2845,7 @@ function switchToManual() {
     button.onclick = returnToScan;
   }
 
-  if (currentMenu === "selfpickup") {
+  if (["selfpickup", "do-balik-dokumentasi"].includes(currentMenu)) {
     renderManualSelfPickupControls();
   }
 }
@@ -2859,6 +2856,8 @@ function switchToManual() {
 // ==================================================
 
 function renderManualSelfPickupControls() {
+
+  const isDoBalik = currentMenu === "do-balik-dokumentasi";
 
   if (
     document.getElementById("manualSelfPickupControls")
@@ -2879,11 +2878,12 @@ function renderManualSelfPickupControls() {
   `;
 
   section.innerHTML = `
-    <h3>Dokumentasi DO</h3>
+    <h3>${isDoBalik ? "Dokumentasi DO Balik" : "Dokumentasi Self Pickup"}</h3>
 
     <p>
-      Ambil foto menggunakan kamera bawaan HP
-      atau pilih foto/PDF dari perangkat.
+      ${isDoBalik
+        ? "Ambil foto bukti DO balik. Minimal satu foto wajib disertakan; PDF boleh menjadi lampiran tambahan."
+        : "Ambil foto menggunakan kamera bawaan HP atau pilih foto/PDF dari perangkat."}
     </p>
 
     <input
@@ -2970,7 +2970,7 @@ function renderManualSelfPickupControls() {
       type="button"
       style="width:100%;margin-top:15px"
     >
-      SIMPAN TRANSAKSI
+      ${isDoBalik ? "SIMPAN DOKUMENTASI DO BALIK" : "SIMPAN TRANSAKSI"}
     </button>
 
     <p id="saveStatus"></p>
@@ -2999,7 +2999,7 @@ function renderManualSelfPickupControls() {
   };
 
   document.getElementById("saveButton").onclick = () => {
-    submitScan("selfpickup");
+    submitScan(currentMenu);
   };
 
   renderAttachmentPreviews();
@@ -3034,6 +3034,12 @@ async function returnToScan() {
 
 function openSelfPickupDocumentation() {
 
+  const isDoBalik = currentMenu === "do-balik-dokumentasi";
+  const documentationTitle = isDoBalik
+    ? "Dokumentasi DO Balik"
+    : "Dokumentasi Self Pickup";
+  const submitMenuId = currentMenu;
+
   const doInput = document.getElementById("doNumber");
 
   const doNumber = doInput
@@ -3060,7 +3066,7 @@ function openSelfPickupDocumentation() {
         ← Kembali
       </button>
 
-      <h2>Dokumentasi Self Pickup</h2>
+      <h2>${escapeHTML(documentationTitle)}</h2>
 
       <div
         style="
@@ -3088,8 +3094,9 @@ function openSelfPickupDocumentation() {
       <h3>Dokumentasi DO</h3>
 
       <p>
-        Ambil foto menggunakan kamera bawaan HP
-        atau pilih foto/PDF dari perangkat.
+        ${isDoBalik
+          ? "Ambil foto bukti DO balik. Minimal satu foto wajib disertakan; PDF boleh menjadi lampiran tambahan."
+          : "Ambil foto menggunakan kamera bawaan HP atau pilih foto/PDF dari perangkat."}
       </p>
 
       <input
@@ -3176,7 +3183,7 @@ function openSelfPickupDocumentation() {
         type="button"
         style="width:100%;margin-top:15px"
       >
-        SIMPAN TRANSAKSI
+        ${isDoBalik ? "SIMPAN DOKUMENTASI DO BALIK" : "SIMPAN TRANSAKSI"}
       </button>
 
       <p id="saveStatus"></p>
@@ -3205,7 +3212,7 @@ function openSelfPickupDocumentation() {
   };
 
   document.getElementById("saveButton").onclick = () => {
-    submitScan("selfpickup");
+    submitScan(submitMenuId);
   };
 
   renderAttachmentPreviews();
@@ -3785,7 +3792,7 @@ function renderScanScreen() {
         </div>
       ` : ""}
 
-      ${currentMenu !== "selfpickup" ? `
+      ${!["selfpickup", "do-balik-dokumentasi"].includes(currentMenu) ? `
         <div style="margin-top:15px">
 
           <label>Remarks</label>
@@ -3901,10 +3908,12 @@ async function submitScan(id) {
     return;
   }
 
-  if (id !== "selfpickup") {
+  const attachmentMenus = ["selfpickup", "do-balik-dokumentasi"];
+
+  if (!attachmentMenus.includes(id)) {
 
     showToast(
-      "Menu transaksi ini tidak tersedia dalam alur lama.",
+      "Menu transaksi ini tidak tersedia dalam alur transaksi satuan.",
       "error"
     );
 
@@ -3954,6 +3963,17 @@ async function submitScan(id) {
     return;
   }
 
+  if (
+    id === "do-balik-dokumentasi" &&
+    !selectedAttachments.some(item => item.file.type.startsWith("image/"))
+  ) {
+    showToast(
+      "Dokumentasi DO Balik wajib menyertakan minimal satu foto.",
+      "error"
+    );
+    return;
+  }
+
   if (selectedAttachments.length > MAX_ATTACHMENTS) {
 
     showToast(
@@ -3994,7 +4014,7 @@ async function submitScan(id) {
     const payload = {
       action: "SCAN",
       idToken: token,
-      menu: "selfpickup",
+      menu: id,
       doNumber: doNumber,
       remarks: remarks,
       inputMethod: inputMethod
@@ -4092,7 +4112,7 @@ async function submitScan(id) {
       );
     }
 
-    console.log("SANY SELF PICKUP PERFORMANCE", {
+    console.log("SANY ATTACHMENT TRANSACTION PERFORMANCE", {
       menu: id,
       doNumber: doNumber,
       preparationMs: Math.round(preparationMs),
@@ -4110,7 +4130,7 @@ async function submitScan(id) {
 
   } catch (error) {
 
-    console.error("Simpan Self Pickup:", error);
+    console.error("Simpan transaksi lampiran:", error);
 
     if (status) {
       status.textContent = error.message;
@@ -4126,7 +4146,9 @@ async function submitScan(id) {
       button.disabled = false;
       button.classList.remove("sany-is-loading");
 
-      button.textContent = "SIMPAN TRANSAKSI";
+      button.textContent = id === "do-balik-dokumentasi"
+        ? "SIMPAN DOKUMENTASI DO BALIK"
+        : "SIMPAN TRANSAKSI";
     }
 
   } finally {
@@ -4196,7 +4218,7 @@ async function initializeBatchStorage() {
 // ==================================================
 
 console.log(
-  "SANY LOGISTIC SYSTEM FRONTEND v3.1.2 LOADED"
+  "SANY LOGISTIC SYSTEM FRONTEND v3.2.0 LOADED"
 );
 
 console.log(
@@ -4205,8 +4227,8 @@ console.log(
 );
 
 console.log(
-  "SELF PICKUP:",
-  "LEGACY TRANSACTION MODE"
+  "SINGLE TRANSACTION MENUS:",
+  ["selfpickup", "do-balik-dokumentasi"]
 );
 
 initializeBatchStorage();

@@ -1,6 +1,6 @@
 /**
  * SANY LOGISTIC SYSTEM
- * FRONTEND v3.1.0
+ * FRONTEND v3.1.2
  * Batch Processing + IndexedDB
  * Self Pickup tetap menggunakan transaksi lama
  */
@@ -673,10 +673,9 @@ async function openMenu(id) {
 
     } else {
 
-      // Self Pickup tetap menggunakan alur lama.
+      // Semua menu memakai aktivasi kamera manual.
+      // PDA tetap dapat mengirim hasil scan melalui keyboard-wedge.
       renderScanScreen();
-
-      await startScanner();
 
       const input = document.getElementById("doNumber");
 
@@ -3023,8 +3022,6 @@ async function returnToScan() {
 
   renderScanScreen();
 
-  await startScanner();
-
   const doInput = document.getElementById("doNumber");
 
   if (doInput) doInput.focus();
@@ -3814,11 +3811,19 @@ function renderScanScreen() {
       ` : ""}
 
       <p id="inputMethod">
-        Metode input: MENUNGGU SCAN
+        Metode input: MENUNGGU SCAN / MANUAL
       </p>
 
     </section>
   `;
+
+  const cameraButton = document.getElementById("batchCameraButton");
+
+  if (cameraButton) {
+    cameraButton.addEventListener("click", async () => {
+      await startScanner();
+    });
+  }
 
   const doInput = document.getElementById("doNumber");
 
@@ -3870,8 +3875,6 @@ async function resetScanForm(id) {
   qrCameraId = null;
 
   renderScanScreen();
-
-  await startScanner();
 
   const input = document.getElementById("doNumber");
 
@@ -4193,7 +4196,7 @@ async function initializeBatchStorage() {
 // ==================================================
 
 console.log(
-  "SANY LOGISTIC SYSTEM FRONTEND v3.1.0 LOADED"
+  "SANY LOGISTIC SYSTEM FRONTEND v3.1.2 LOADED"
 );
 
 console.log(

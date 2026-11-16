@@ -2323,7 +2323,27 @@ async function sendBatchToServer(batchPayload) {
 
   return result;
 }
+async function getBatchStatusFromServer(batchId) {
+  if (!auth.currentUser) {
+    throw new Error("Sesi login sudah berakhir.");
+  }
 
+  const token = await auth.currentUser.getIdToken();
+
+  const result = await callAppsScript({
+    action: "BATCH_STATUS",
+    idToken: token,
+    batchId: batchId
+  });
+
+  if (!result || result.success !== true) {
+    throw new Error(
+      result?.message || "Gagal memeriksa status batch server."
+    );
+  }
+
+  return result;
+}
 
 // ==================================================
 // 39. VALIDASI RESPONS SERVER

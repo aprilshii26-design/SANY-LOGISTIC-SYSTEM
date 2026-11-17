@@ -1337,7 +1337,6 @@ try {
   }
 
   const item = {
-    const item = {
       itemId: createBatchId(),
       batchId: activeBatch.batchId,
       sequence: activeBatch.items.length + 1,

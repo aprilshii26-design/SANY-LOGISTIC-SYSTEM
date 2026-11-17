@@ -68,6 +68,12 @@ let batchDatabase = null;
 let activeBatch = null;
 let batchSaving = false;
 
+// Cache DO database untuk validasi scan tanpa round-trip server setiap DO.
+let batchDuplicateCache = new Set();
+let batchDuplicateCacheMenu = null;
+let batchDuplicateCacheLoadedAt = 0;
+let batchDuplicateCacheReady = false;
+
 const main = document.querySelector("main");
 
 if (!main) {
@@ -672,6 +678,9 @@ async function openMenu(id) {
 
       await getOrCreateBatch(id);
 
+      // Ambil daftar DO tujuan satu kali saat menu dibuka.
+      await loadBatchDuplicateCache(id);
+
       renderBatchScreen();
 
       const input = document.getElementById("doNumber");
@@ -1207,34 +1216,52 @@ function updateBatchInputStatus() {
 }
 
 // ==================================================
-// CEK DUPLIKAT DO KE SERVER
+// CACHE DUPLIKAT DO DARI SERVER
 // ==================================================
 
-async function checkBatchDOOnServer(menu, doNumber) {
+async function loadBatchDuplicateCache(menu) {
 
   if (!auth.currentUser) {
     throw new Error("Sesi login sudah berakhir.");
   }
 
+  batchDuplicateCacheReady = false;
+  batchDuplicateCacheMenu = null;
+  batchDuplicateCache = new Set();
+
   const token = await auth.currentUser.getIdToken();
 
   const result = await callAppsScript({
-    action: "BATCH_CHECK_DO",
+    action: "BATCH_DO_CACHE",
     idToken: token,
-    menu: menu,
-    doNumber: doNumber
+    menu: menu
   });
 
-  if (!result || result.success !== true) {
+  if (!result || result.success !== true || !Array.isArray(result.doNumbers)) {
     throw new Error(
       result && result.message
         ? result.message
-        : "Gagal memeriksa DO ke server."
+        : "Gagal memuat daftar DO untuk validasi duplikat."
     );
   }
 
-  return result;
+  batchDuplicateCache = new Set(
+    result.doNumbers.map(normalizeDONumber).filter(Boolean)
+  );
+  batchDuplicateCacheMenu = menu;
+  batchDuplicateCacheLoadedAt = Date.now();
+  batchDuplicateCacheReady = true;
+
+  console.log(
+    "BATCH DUPLICATE CACHE READY:",
+    menu,
+    batchDuplicateCache.size
+  );
+
+  return batchDuplicateCache.size;
 }
+
+
 // ==================================================
 // 21. TAMBAHKAN DO KE BATCH
 // ==================================================
@@ -1312,29 +1339,33 @@ async function addBatchDO(method = "MANUAL", value = null) {
     activeBatch.logisticName = logisticName;
   }
 
+if (
+  !batchDuplicateCacheReady ||
+  batchDuplicateCacheMenu !== activeBatch.menu
+) {
+  showToast(
+    "Cache validasi belum siap. Tutup lalu buka kembali menu batch.",
+    "error"
+  );
+  return;
+}
+
+// Pengecekan database dilakukan lokal agar scan PDA tidak menunggu server.
+if (batchDuplicateCache.has(normalized)) {
+  showToast(
+    "DO " + doNumber + " sudah tercatat di database!",
+    "error"
+  );
+  if (input && value === null) {
+    input.select();
+    input.focus();
+  }
+  return;
+}
+
 batchSaving = true;
 
 try {
-
-  // CEK DO KE DATABASE SERVER SEBELUM MASUK BATCH
-  const serverCheck = await checkBatchDOOnServer(
-    activeBatch.menu,
-    doNumber
-  );
-
-  if (serverCheck.duplicate) {
-    showToast(
-      "DO " + doNumber + " sudah tercatat di database!",
-      "error"
-    );
-
-    if (input && value === null) {
-      input.select();
-      input.focus();
-    }
-
-    return;
-  }
 
   const item = {
       itemId: createBatchId(),
@@ -1360,6 +1391,9 @@ try {
     activeBatch.updatedAt = new Date().toISOString();
 
     await saveLocalBatch(activeBatch);
+
+    // Tandai langsung agar DO yang baru masuk tidak lolos scan berikutnya.
+    batchDuplicateCache.add(normalized);
 
     if (input) {
       input.value = "";

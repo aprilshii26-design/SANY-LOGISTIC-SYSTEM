@@ -1206,7 +1206,35 @@ function updateBatchInputStatus() {
     (inputMethod === "SCAN" ? "SCAN" : "MANUAL");
 }
 
+// ==================================================
+// CEK DUPLIKAT DO KE SERVER
+// ==================================================
 
+async function checkBatchDOOnServer(menu, doNumber) {
+
+  if (!auth.currentUser) {
+    throw new Error("Sesi login sudah berakhir.");
+  }
+
+  const token = await auth.currentUser.getIdToken();
+
+  const result = await callAppsScript({
+    action: "BATCH_CHECK_DO",
+    idToken: token,
+    menu: menu,
+    doNumber: doNumber
+  });
+
+  if (!result || result.success !== true) {
+    throw new Error(
+      result && result.message
+        ? result.message
+        : "Gagal memeriksa DO ke server."
+    );
+  }
+
+  return result;
+}
 // ==================================================
 // 21. TAMBAHKAN DO KE BATCH
 // ==================================================

@@ -1312,10 +1312,31 @@ async function addBatchDO(method = "MANUAL", value = null) {
     activeBatch.logisticName = logisticName;
   }
 
-  batchSaving = true;
+batchSaving = true;
 
-  try {
+try {
 
+  // CEK DO KE DATABASE SERVER SEBELUM MASUK BATCH
+  const serverCheck = await checkBatchDOOnServer(
+    activeBatch.menu,
+    doNumber
+  );
+
+  if (serverCheck.duplicate) {
+    showToast(
+      "DO " + doNumber + " sudah tercatat di database!",
+      "error"
+    );
+
+    if (input && value === null) {
+      input.select();
+      input.focus();
+    }
+
+    return;
+  }
+
+  const item = {
     const item = {
       itemId: createBatchId(),
       batchId: activeBatch.batchId,

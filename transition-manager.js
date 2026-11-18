@@ -1,25 +1,50 @@
-/* Observe only direct page replacement inside <main>; does not modify application workflows. */
+/* SANY Global Page Transition Manager V2
+   Watches only direct page replacement inside main.container.
+   No application/business logic is modified.
+*/
 (() => {
   'use strict';
+
   const main = document.querySelector('main.container');
   if (!main || !('MutationObserver' in window)) return;
 
-  let frame = 0;
+  let frameId = 0;
+  let lastRun = 0;
+
   const animatePage = () => {
-    cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
+    if (window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       main.classList.remove('sany-page-enter');
-      // Force a single style recalculation to restart the page-entry animation.
+      return;
+    }
+
+    cancelAnimationFrame(frameId);
+    frameId = requestAnimationFrame(() => {
+      // Avoid replaying the same animation for several DOM writes in one frame.
+      const now = performance.now();
+      if (now - lastRun < 40) return;
+      lastRun = now;
+
+      main.classList.remove('sany-page-enter');
       void main.offsetWidth;
       main.classList.add('sany-page-enter');
     });
   };
 
   const observer = new MutationObserver(records => {
-    if (records.some(record => record.type === 'childList' && record.target === main)) {
-      animatePage();
-    }
+    const pageWasReplaced = records.some(record =>
+      record.type === 'childList' && record.target === main
+    );
+
+    if (pageWasReplaced) animatePage();
   });
+
   observer.observe(main, { childList: true });
-  window.addEventListener('pageshow', event => { if (event.persisted) animatePage(); });
+
+  window.addEventListener('pageshow', event => {
+    if (event.persisted) animatePage();
+  });
+
+  // Handle a page that was already rendered before this manager initialized.
+  if (main.children.length) animatePage();
 })();

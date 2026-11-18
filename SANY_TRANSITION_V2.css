@@ -1,0 +1,63 @@
+/* SANY GLOBAL PAGE TRANSITION V2
+   Presentation-only layer. Does not touch scanner, Firebase, IndexedDB,
+   Apps Script, batch state, or transaction logic.
+*/
+
+@keyframes sanyPageEnterV2 {
+  0% {
+    opacity: 0;
+    transform: translate3d(26px, 0, 0) scale(.992);
+    filter: blur(2px);
+  }
+  65% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* The page container itself stays still; only its new direct page content moves. */
+main.container.sany-page-enter > * {
+  animation: sanyPageEnterV2 480ms cubic-bezier(.22,.78,.22,1) both;
+}
+
+/* Small cascade makes dashboard sections and page blocks feel connected. */
+main.container.sany-page-enter > *:nth-child(1) { animation-delay: 0ms; }
+main.container.sany-page-enter > *:nth-child(2) { animation-delay: 45ms; }
+main.container.sany-page-enter > *:nth-child(3) { animation-delay: 90ms; }
+main.container.sany-page-enter > *:nth-child(4) { animation-delay: 125ms; }
+main.container.sany-page-enter > *:nth-child(n+5) { animation-delay: 150ms; }
+
+/* Prevent movement/blur on live camera and media surfaces. */
+main.container.sany-page-enter #reader,
+main.container.sany-page-enter video,
+main.container.sany-page-enter canvas,
+main.container.sany-page-enter input,
+main.container.sany-page-enter textarea,
+main.container.sany-page-enter select,
+main.container.sany-page-enter button {
+  filter: none;
+}
+
+/* Keep existing card animation, but avoid stacking two entrance animations. */
+main.container.sany-page-enter .sany-do-card {
+  animation-name: sanyCardIn;
+}
+
+/* Existing child fade-up rules in style.css are superseded only during page entry. */
+main.container.sany-page-enter > .form-scan,
+main.container.sany-page-enter > section {
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main.container.sany-page-enter > * {
+    animation: none !important;
+    filter: none !important;
+    transform: none !important;
+  }
+}

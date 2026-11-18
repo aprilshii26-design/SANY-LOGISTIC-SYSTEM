@@ -68,12 +68,6 @@ let batchDatabase = null;
 let activeBatch = null;
 let batchSaving = false;
 
-// Cache DO database untuk validasi scan tanpa round-trip server setiap DO.
-let batchDuplicateCache = new Set();
-let batchDuplicateCacheMenu = null;
-let batchDuplicateCacheLoadedAt = 0;
-let batchDuplicateCacheReady = false;
-
 const main = document.querySelector("main");
 
 if (!main) {
@@ -678,8 +672,8 @@ async function openMenu(id) {
 
       await getOrCreateBatch(id);
 
-      // Ambil daftar DO tujuan satu kali saat menu dibuka.
-      await loadBatchDuplicateCache(id);
+      // Duplikat hanya diperiksa terhadap item di batch aktif.
+      // Riwayat DO pada spreadsheet tidak digunakan untuk memblokir batch baru.
 
       renderBatchScreen();
 
@@ -1216,59 +1210,35 @@ function updateBatchInputStatus() {
 }
 
 // ==================================================
-// CACHE DUPLIKAT DO DARI SERVER
-// ==================================================
-
-async function loadBatchDuplicateCache(menu) {
-
-  if (!auth.currentUser) {
-    throw new Error("Sesi login sudah berakhir.");
-  }
-
-  batchDuplicateCacheReady = false;
-  batchDuplicateCacheMenu = null;
-  batchDuplicateCache = new Set();
-
-  const token = await auth.currentUser.getIdToken();
-
-  const result = await callAppsScript({
-    action: "BATCH_DO_CACHE",
-    idToken: token,
-    menu: menu
-  });
-
-  if (!result || result.success !== true || !Array.isArray(result.doNumbers)) {
-    throw new Error(
-      result && result.message
-        ? result.message
-        : "Gagal memuat daftar DO untuk validasi duplikat."
-    );
-  }
-
-  batchDuplicateCache = new Set(
-    result.doNumbers.map(normalizeDONumber).filter(Boolean)
-  );
-  batchDuplicateCacheMenu = menu;
-  batchDuplicateCacheLoadedAt = Date.now();
-  batchDuplicateCacheReady = true;
-
-  console.log(
-    "BATCH DUPLICATE CACHE READY:",
-    menu,
-    batchDuplicateCache.size
-  );
-
-  return batchDuplicateCache.size;
-}
-
-
-// ==================================================
 // 21. TAMBAHKAN DO KE BATCH
 // ==================================================
 
 async function addBatchDO(method = "MANUAL", value = null) {
 
-  if (batchSaving) return;
+  if (batchSaving) {
+    const pendingValue = String(
+      value !== null
+        ? value
+        : (document.getElementById("doNumber")?.value || "")
+    ).trim();
+    const pendingNormalized = normalizeDONumber(pendingValue);
+    const alreadyInActiveBatch = Boolean(
+      pendingNormalized &&
+      activeBatch &&
+      Array.isArray(activeBatch.items) &&
+      activeBatch.items.some(item =>
+        normalizeDONumber(item.doNumber) === pendingNormalized
+      )
+    );
+
+    showToast(
+      alreadyInActiveBatch
+        ? "DO " + pendingValue + " sudah ada dalam batch ini. Scan ditolak."
+        : "Scan sebelumnya masih disimpan. Tunggu sebentar.",
+      "error"
+    );
+    return;
+  }
 
   if (!activeBatch) {
     showToast("Batch belum tersedia.", "error");
@@ -1302,6 +1272,8 @@ async function addBatchDO(method = "MANUAL", value = null) {
 
   const normalized = normalizeDONumber(doNumber);
 
+  // Satu-satunya aturan duplikat saat scan: DO sudah ada di batch aktif.
+  // DO yang pernah diekspor pada batch/menu lain tetap boleh diproses.
   const duplicate = activeBatch.items.some(item =>
     normalizeDONumber(item.doNumber) === normalized
   );
@@ -1339,30 +1311,6 @@ async function addBatchDO(method = "MANUAL", value = null) {
     activeBatch.logisticName = logisticName;
   }
 
-if (
-  !batchDuplicateCacheReady ||
-  batchDuplicateCacheMenu !== activeBatch.menu
-) {
-  showToast(
-    "Cache validasi belum siap. Tutup lalu buka kembali menu batch.",
-    "error"
-  );
-  return;
-}
-
-// Pengecekan database dilakukan lokal agar scan PDA tidak menunggu server.
-if (batchDuplicateCache.has(normalized)) {
-  showToast(
-    "DO " + doNumber + " sudah tercatat di database!",
-    "error"
-  );
-  if (input && value === null) {
-    input.select();
-    input.focus();
-  }
-  return;
-}
-
 batchSaving = true;
 
 try {
@@ -1391,9 +1339,6 @@ try {
     activeBatch.updatedAt = new Date().toISOString();
 
     await saveLocalBatch(activeBatch);
-
-    // Tandai langsung agar DO yang baru masuk tidak lolos scan berikutnya.
-    batchDuplicateCache.add(normalized);
 
     if (input) {
       input.value = "";

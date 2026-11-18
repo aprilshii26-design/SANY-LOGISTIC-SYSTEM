@@ -1,20 +1,25 @@
-/* SANY Global Transition Manager - additive presentation layer. */
-@keyframes sanyPageEnterV1 {
-  from { opacity: 0; transform: translate3d(0, 10px, 0); }
-  to   { opacity: 1; transform: translate3d(0, 0, 0); }
-}
+/* Observe only direct page replacement inside <main>; does not modify application workflows. */
+(() => {
+  'use strict';
+  const main = document.querySelector('main.container');
+  if (!main || !('MutationObserver' in window)) return;
 
-main.container.sany-page-enter {
-  animation: sanyPageEnterV1 220ms cubic-bezier(.2,.75,.25,1) both;
-}
+  let frame = 0;
+  const animatePage = () => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      main.classList.remove('sany-page-enter');
+      // Force a single style recalculation to restart the page-entry animation.
+      void main.offsetWidth;
+      main.classList.add('sany-page-enter');
+    });
+  };
 
-/* Keep motion compositing lightweight and avoid animating form controls individually. */
-main.container.sany-page-enter #reader,
-main.container.sany-page-enter video,
-main.container.sany-page-enter canvas {
-  animation: none !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  main.container.sany-page-enter { animation: none !important; }
-}
+  const observer = new MutationObserver(records => {
+    if (records.some(record => record.type === 'childList' && record.target === main)) {
+      animatePage();
+    }
+  });
+  observer.observe(main, { childList: true });
+  window.addEventListener('pageshow', event => { if (event.persisted) animatePage(); });
+})();
